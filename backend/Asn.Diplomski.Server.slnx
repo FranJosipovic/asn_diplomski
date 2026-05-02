@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Asn.Diplomski.Server/Command.md" />
+    <File Path="Asn.Diplomski.Server/docker-compose.yml" />
+  </Folder>
+  <Project Path="Asn.Diplomski.Domain/Asn.Diplomski.Domain.csproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
+  <Project Path="Asn.Diplomski.Application/Asn.Diplomski.Application.csproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
+  <Project Path="Asn.Diplomski.Rdbm/Asn.Diplomski.Rdbm.csproj" Id="7329f65c-7be9-4f38-a0c9-bf757b231742" />
+  <Project Path="Asn.Diplomski.Server/Asn.Diplomski.Server.csproj" />
+</Solution>

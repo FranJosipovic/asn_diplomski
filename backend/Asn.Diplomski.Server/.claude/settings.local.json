@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet restore *)",
+      "Bash(dotnet script *)",
+      "Read(//c/Users/Fran/.nuget/packages/mqttnet/4.3.6.1152/lib/net6.0/**)",
+      "Bash(powershell -Command \"Add-Type -Path 'C:\\\\\\\\Users\\\\\\\\Fran\\\\\\\\.nuget\\\\\\\\packages\\\\\\\\mqttnet\\\\\\\\4.3.6.1152\\\\\\\\lib\\\\\\\\net6.0\\\\\\\\MQTTnet.dll'; [MQTTnet.Client.IMqttClient].GetMembers\\(\\) | Select-Object -ExpandProperty Name | Sort-Object -Unique\")",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(dotnet run *)",
+      "Bash(taskkill /F /IM mosquitto.exe)",
+      "Bash(net stop *)",
+      "Bash(dotnet add *)",
+      "Bash(powershell -Command ' *)",
+      "Bash(mkdir -p /tmp/FindTypes)",
+      "Bash(cp /tmp/FindTypes.csproj /tmp/FindTypes/)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\Asn.Diplomski.Server\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)",
+      "PowerShell(New-Item *)",
+      "Bash(robocopy \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\Asn.Diplomski.Server\" \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\Asn.Diplomski\\\\Asn.Diplomski.Server\" /E /XD obj bin /NP)"
+    ]
+  }
+}
