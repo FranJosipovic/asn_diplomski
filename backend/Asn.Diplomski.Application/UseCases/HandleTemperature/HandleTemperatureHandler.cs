@@ -26,7 +26,7 @@ namespace Asn.Diplomski.Application.UseCases.HandleTemperature
             //Insert into db
             var reading = new TemperatureReading
             {
-                SensorId = command.DeviceId,
+                SensorId = command.SensorId,
                 Value = command.Value,
                 RecordedAt = DateTime.UtcNow
             };

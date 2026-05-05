@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\backend\" -Recurse -Name)",
-      "Bash(dotnet ef *)"
+      "Bash(dotnet ef *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\backend\" -Recurse -Filter \"*.cs\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(dotnet build *)"
     ]
   }
 }

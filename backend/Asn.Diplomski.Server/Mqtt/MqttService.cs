@@ -69,7 +69,7 @@ namespace Asn.Diplomski.Server.Mqtt
         {
             foreach (var sensor in device.Sensors.Where(s => s.IsActive && s.Type != SensorType.PumpCommand))
             {
-                var topic = MqttTopics.BuildSensorTopic(device.TenantId, device.Id, sensor.Type);
+                var topic = MqttTopics.BuildSensorTopic(device.TenantId, device.Id,sensor.Id, sensor.Type);
                 _subscribedTopics.TryAdd(topic, 0);
 
                 if (!_client.IsConnected)

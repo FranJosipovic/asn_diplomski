@@ -8,18 +8,20 @@ namespace Asn.Diplomski.Application.Mqtt
         public const string SlugWaterLevel   = "water-level";
         public const string SlugTemperature  = "temperature";
 
-        public static string BuildSensorTopic(long tenantId, long deviceId, SensorType sensorType)
-            => $"tenant_{tenantId}/device_{deviceId}/sensor/{GetSensorSlug(sensorType)}";
+        public static string BuildSensorTopic(long tenantId, long deviceId, long sensorId, SensorType sensorType)
+            => $"tenant_{tenantId}/device_{deviceId}/sensor_{sensorId}/{GetSensorSlug(sensorType)}";
 
-        public static bool TryParseTenantDevice(string topic, out long tenantId, out long deviceId)
+        public static bool TryParseTenantDevice(string topic, out long tenantId, out long deviceId, out long sensorId)
         {
             tenantId = 0;
             deviceId = 0;
-            // "tenant_1/device_2/sensor/soil"
+            sensorId = 0;
+            // "tenant_1/device_2/sensor_1/soil"
             var parts = topic.Split('/');
             if (parts.Length < 2) return false;
             return long.TryParse(parts[0].Replace("tenant_", ""), out tenantId)
-                && long.TryParse(parts[1].Replace("device_", ""), out deviceId);
+                && long.TryParse(parts[1].Replace("device_", ""), out deviceId)
+                && long.TryParse(parts[2].Replace("sensor_", ""), out sensorId);
         }
 
         public static string GetSensorSlug(SensorType type) => type switch

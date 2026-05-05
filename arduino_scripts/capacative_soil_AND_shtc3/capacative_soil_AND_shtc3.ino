@@ -1,13 +1,10 @@
-#include <WiFi.h>          // ESP32 (use <ESP8266WiFi.h> for ESP8266)
+#include <WiFi.h>
+#include <WiFiManager.h>
 #include <PubSubClient.h>
 #include "SHTC3-SOLDERED.h"
 
 SHTC3 shtcSensor;
-
-// ===== WIFI =====
-const char* WIFI_SSID = "Speedport-031111";
-const char* WIFI_PASS = "x9ptbkxb5bxx2kxx";
-
+//x9ptbkxb5bxx2kxx
 // ===== MQTT =====
 const char* MQTT_HOST = "192.168.1.110";
 const int   MQTT_PORT = 1883;
@@ -15,8 +12,8 @@ const int   MQTT_PORT = 1883;
 // ===== EASY TO CHANGE =====
 const char* TENANT_ID = "1";
 const char* DEVICE_ID = "1";
-const char* SOIL_SENSOR_ID = "soil-1";
-const char* TEMP_SENSOR_ID = "temp-1";
+const char* SOIL_SENSOR_ID = "2";
+const char* TEMP_SENSOR_ID = "1";
 
 // ===== SOIL SENSOR CALIB =====
 const int sensorPin = 10;
@@ -25,33 +22,22 @@ const int WET_VALUE = 0;
 
 WiFiClient wifiClient;
 PubSubClient mqtt(wifiClient);
+WiFiManager wm;
 
 void logLine(const String& msg)
 {
     Serial.println("[LOG] " + msg);
 }
 
-void connectWiFi()
-{
-    logLine("Connecting to WiFi...");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-
-    Serial.println();
-    logLine("WiFi connected. IP: " + WiFi.localIP().toString());
-}
-
 void connectMqtt()
 {
     logLine("Connecting to MQTT broker...");
 
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+
     while (!mqtt.connected()) {
         if (mqtt.connect("arduino-client", nullptr, nullptr, nullptr, 0, false, nullptr, true)) {
-            logLine("MQTT connected to " + String(MQTT_HOST));
+            logLine("MQTT connected");
         } else {
             logLine("MQTT failed. state=" + String(mqtt.state()));            
             delay(1000);
@@ -61,9 +47,17 @@ void connectMqtt()
 
 String topic(const char* sensor)
 {
+    const char* SENSOR_ID = "";
+
+    if (strcmp(sensor, "temperature") == 0) {
+        SENSOR_ID = TEMP_SENSOR_ID;
+    } else if (strcmp(sensor, "soil") == 0) {
+        SENSOR_ID = SOIL_SENSOR_ID;
+    }
+
     return String("tenant_") + TENANT_ID +
            "/device_" + DEVICE_ID +
-           "/sensor/" + sensor;
+           "/sensor_" + SENSOR_ID + "/" + sensor;
 }
 
 void publishJson(const String& t, const String& payload)
@@ -103,14 +97,18 @@ void setup()
 {
     Serial.begin(115200);
     delay(1000);
-
+    wm.resetSettings();
     logLine("Booting device...");
     shtcSensor.begin();
 
-    connectWiFi();
-    mqtt.setServer(MQTT_HOST, MQTT_PORT);
-    mqtt.setKeepAlive(60);
-    mqtt.setSocketTimeout(5);
+    bool res = wm.autoConnect("Irrigation-Setup");
+
+    if (!res) {
+        ESP.restart();
+    }
+
+    logLine("WiFi connected. IP: " + WiFi.localIP().toString());
+
     connectMqtt();
 }
 

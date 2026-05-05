@@ -14,6 +14,8 @@ using System.Reflection;
 using Asn.Diplomski.Rdbm.Repositories;
 using Asn.Diplomski.Application.UseCases.ConnectTenant;
 using Asn.Diplomski.Application.UseCases.HandleTemperature;
+using Asn.Diplomski.Application.UseCases.GetTemperatureReadings;
+using Asn.Diplomski.Application.UseCases.GetSoilMoistureReadings;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -50,6 +52,8 @@ builder.Services.AddScoped<ConnectDeviceHandler>();
 builder.Services.AddScoped<HandleSoilMoistureHandler>();
 builder.Services.AddScoped<HandleWaterLevelHandler>();
 builder.Services.AddScoped<HandleTemperatureHandler>();
+builder.Services.AddScoped<GetTemperatureReadingsHandler>();
+builder.Services.AddScoped<GetSoilMoistureReadingsHandler>();
 
 // ── Controllers ─────────────────────────────────────────────
 builder.Services.AddControllers();

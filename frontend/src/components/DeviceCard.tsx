@@ -1,11 +1,12 @@
-import { DeviceType, deviceTypeLabel, sensorTypeClass, sensorTypeLabel, timeAgo, isRecentlySeen, formatDateTime } from '../types'
-import type { DeviceResponse } from '../types'
+import { DeviceType, deviceTypeLabel, sensorTypeClass, sensorTypeLabel, timeAgo, isRecentlySeen, formatDateTime, SensorType } from '../types'
+import type { DeviceResponse, SensorResponse } from '../types'
 
 interface Props {
   device: DeviceResponse
+  onSensorClick?: (sensor: SensorResponse) => void
 }
 
-export default function DeviceCard({ device }: Props) {
+export default function DeviceCard({ device, onSensorClick }: Props) {
   const isSensor = device.type === DeviceType.SensorUnit
   const recently = isRecentlySeen(device.lastSeenAt)
 
@@ -51,15 +52,23 @@ export default function DeviceCard({ device }: Props) {
           </div>
         ) : (
           <div>
-            {device.sensors.map(s => (
-              <div key={s.id} className="sensor-row">
-                <div className="sensor-left">
-                  <div className={`sensor-pip ${sensorTypeClass(s.type)}`} />
-                  <span className="sensor-name">{sensorTypeLabel(s.type)}</span>
-                </div>
-                <span className="sensor-id">ID {s.id} · #{s.sensorNumber}</span>
-              </div>
-            ))}
+            {device.sensors.map(s => {
+              const isReadable = s.type === SensorType.Temperature || s.type === SensorType.SoilMoisture
+              return (
+                <button
+                  key={s.id}
+                  className={`sensor-row ${isReadable ? 'readable' : ''}`}
+                  onClick={() => isReadable && onSensorClick?.(s)}
+                  style={{ cursor: isReadable ? 'pointer' : 'default' }}
+                >
+                  <div className="sensor-left">
+                    <div className={`sensor-pip ${sensorTypeClass(s.type)}`} />
+                    <span className="sensor-name">{sensorTypeLabel(s.type)}</span>
+                  </div>
+                  <span className="sensor-id" style={{marginLeft:"5px"}}>ID {s.id} · #{s.sensorNumber}</span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

@@ -51,7 +51,7 @@ namespace Asn.Diplomski.Application.UseCases.ConnectTenant
 
                 foreach (var sensor in item.Sensors)
                 {
-                    topics.Add(MqttTopics.BuildSensorTopic(tenantId, item.Id, sensor.Type));
+                    topics.Add(MqttTopics.BuildSensorTopic(tenantId, item.Id, sensor.Id, sensor.Type));
                 }
             }
 

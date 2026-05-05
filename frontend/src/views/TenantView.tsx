@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { getTenant } from '../api'
-import type { TenantResponse } from '../types'
+import type { TenantResponse, SensorResponse } from '../types'
 import { formatDateTime } from '../types'
 import DeviceCard from '../components/DeviceCard'
+import SensorDetail from '../components/SensorDetail'
 
 interface Props {
   id: number
@@ -14,6 +15,7 @@ export default function TenantView({ id, onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [selectedSensor, setSelectedSensor] = useState<SensorResponse | null>(null)
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -59,6 +61,10 @@ export default function TenantView({ id, onBack }: Props) {
   }
 
   if (!tenant) return null
+
+  if (selectedSensor) {
+    return <SensorDetail sensor={selectedSensor} onClose={() => setSelectedSensor(null)} />
+  }
 
   const nil = (v: string | null) =>
     v ? <span className="info-val">{v}</span> : <span className="info-val nil">—</span>
@@ -144,7 +150,11 @@ export default function TenantView({ id, onBack }: Props) {
       ) : (
         <div className="devices-grid">
           {tenant.devices.map(device => (
-            <DeviceCard key={device.id} device={device} />
+            <DeviceCard
+              key={device.id}
+              device={device}
+              onSensorClick={setSelectedSensor}
+            />
           ))}
         </div>
       )}

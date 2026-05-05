@@ -1,0 +1,391 @@
+openapi: "3.0.3"
+info:
+  title: Automatski Ustav za Navodnjavanje — API
+  version: "1.0"
+  description: >
+    REST API for the IoT irrigation SaaS backend.
+    Base URL (dev): http://localhost:5064
+
+servers:
+  - url: http://localhost:5064
+    description: Local development
+
+# ─────────────────────────────────────────────────────────────
+# TENANTS
+# ─────────────────────────────────────────────────────────────
+paths:
+
+  /api/tenants:
+    post:
+      summary: Create tenant
+      description: >
+        Creates a new tenant and auto-provisions one SensorUnit (temperature +
+        soil-moisture sensors) and one PumpUnit (water-level + pump-command sensors).
+      tags: [Tenants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+            example:
+              name: "Ivić Farms d.o.o."
+              email: "ivic@example.com"
+              password: "SuperTajnaLozinka1!"
+              plan: "basic"
+      responses:
+        "201":
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        "409":
+          description: Email already exists
+        "400":
+          description: Validation error
+
+  /api/tenants/{id}:
+    get:
+      summary: Get tenant by ID
+      description: Returns tenant with all devices and their sensors.
+      tags: [Tenants]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        "200":
+          description: Tenant found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        "404":
+          description: Tenant not found
+
+  /api/tenants/{id}/connect:
+    post:
+      summary: Activate MQTT subscriptions for a tenant
+      description: >
+        Called by the microcontroller on startup. The server subscribes to all
+        MQTT topics for the tenant's devices and starts receiving sensor data.
+      tags: [Tenants]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        "200":
+          description: Subscriptions active
+          content:
+            application/json:
+              example:
+                message: "Pretplata aktivna."
+                topics:
+                  - "tenant_1/device_1/sensor/temperature"
+                  - "tenant_1/device_1/sensor/soil"
+                  - "tenant_1/device_2/sensor/water-level"
+        "404":
+          description: Tenant not found
+
+# ─────────────────────────────────────────────────────────────
+# SENSOR READINGS
+# ─────────────────────────────────────────────────────────────
+
+  /api/sensors/{sensorId}/temperature/latest:
+    get:
+      summary: Latest temperature reading
+      description: Returns the single most recent temperature reading for the sensor.
+      tags: [Sensor Readings]
+      parameters:
+        - $ref: '#/components/parameters/SensorId'
+      responses:
+        "200":
+          description: Reading found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingResponse'
+              example:
+                id: 42
+                value: 23.7
+                recordedAt: "2026-05-05T14:30:00Z"
+        "404":
+          description: No readings available for this sensor
+
+  /api/sensors/{sensorId}/temperature:
+    get:
+      summary: Temperature reading history
+      description: >
+        Returns a list of temperature readings for the sensor within the
+        requested time window. Use the `window` query parameter to control
+        how far back to look (default 24h).
+      tags: [Sensor Readings]
+      parameters:
+        - $ref: '#/components/parameters/SensorId'
+        - $ref: '#/components/parameters/Window'
+      responses:
+        "200":
+          description: Reading history (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingHistoryResponse'
+              example:
+                sensorId: 1
+                unit: "°C"
+                readings:
+                  - id: 40
+                    value: 22.1
+                    recordedAt: "2026-05-05T12:00:00Z"
+                  - id: 41
+                    value: 22.8
+                    recordedAt: "2026-05-05T13:00:00Z"
+                  - id: 42
+                    value: 23.7
+                    recordedAt: "2026-05-05T14:00:00Z"
+
+  /api/sensors/{sensorId}/soil-moisture/latest:
+    get:
+      summary: Latest soil moisture reading
+      description: Returns the single most recent soil moisture reading for the sensor.
+      tags: [Sensor Readings]
+      parameters:
+        - $ref: '#/components/parameters/SensorId'
+      responses:
+        "200":
+          description: Reading found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingResponse'
+              example:
+                id: 17
+                value: 42.5
+                recordedAt: "2026-05-05T14:30:00Z"
+        "404":
+          description: No readings available for this sensor
+
+  /api/sensors/{sensorId}/soil-moisture:
+    get:
+      summary: Soil moisture reading history
+      description: >
+        Returns a list of soil moisture readings (0–100 %) for the sensor
+        within the requested time window. Use `window` to control lookback range.
+      tags: [Sensor Readings]
+      parameters:
+        - $ref: '#/components/parameters/SensorId'
+        - $ref: '#/components/parameters/Window'
+      responses:
+        "200":
+          description: Reading history (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingHistoryResponse'
+              example:
+                sensorId: 2
+                unit: "%"
+                readings:
+                  - id: 15
+                    value: 55.0
+                    recordedAt: "2026-05-05T10:00:00Z"
+                  - id: 16
+                    value: 38.2
+                    recordedAt: "2026-05-05T12:00:00Z"
+                  - id: 17
+                    value: 42.5
+                    recordedAt: "2026-05-05T14:00:00Z"
+
+# ─────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────
+components:
+
+  parameters:
+    TenantId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Tenant ID
+
+    SensorId:
+      name: sensorId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Sensor ID
+
+    Window:
+      name: window
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [1h, 6h, 24h, 7d, 30d]
+        default: 24h
+      description: "Time window for historical data. Accepted values: 1h, 6h, 24h, 7d, 30d"
+
+  schemas:
+
+    CreateTenantRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+        plan:
+          type: string
+          default: basic
+        phoneNumber:
+          type: string
+          nullable: true
+        contactPersonName:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        postalCode:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+
+    TenantResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        email:
+          type: string
+        plan:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        phoneNumber:
+          type: string
+          nullable: true
+        contactPersonName:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        postalCode:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceResponse'
+
+    DeviceResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: integer
+          description: "1 = SensorUnit, 2 = PumpUnit"
+          enum: [1, 2]
+        deviceNumber:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+        sensors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SensorResponse'
+
+    SensorResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: integer
+          description: "1 = Temperature, 2 = SoilMoisture, 3 = WaterLevel, 4 = PumpCommand"
+          enum: [1, 2, 3, 4]
+        sensorNumber:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    ReadingResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        value:
+          type: number
+          format: double
+          description: "Temperature in °C or soil moisture in %"
+        recordedAt:
+          type: string
+          format: date-time
+
+    ReadingHistoryResponse:
+      type: object
+      properties:
+        sensorId:
+          type: integer
+          format: int64
+        unit:
+          type: string
+          description: "Unit of measurement: °C for temperature, % for soil moisture"
+          example: "°C"
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadingResponse'

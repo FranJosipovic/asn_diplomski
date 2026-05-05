@@ -15,13 +15,13 @@ namespace Asn.Diplomski.Server.Mqtt
         {
             command = default!;
 
-            if (!MqttTopics.TryParseTenantDevice(topic, out var tenantId, out var deviceId))
+            if (!MqttTopics.TryParseTenantDevice(topic, out var tenantId, out var deviceId, out var sensorId))
                 return false;
 
             if (!TryParseValue(payload, out var value))
                 return false;
 
-            command = new HandleSoilMoistureCommand(tenantId, deviceId, value);
+            command = new HandleSoilMoistureCommand(tenantId, deviceId,sensorId, value);
             return true;
         }
 
@@ -32,13 +32,13 @@ namespace Asn.Diplomski.Server.Mqtt
         {
             command = default!;
 
-            if (!MqttTopics.TryParseTenantDevice(topic, out var tenantId, out var deviceId))
+            if (!MqttTopics.TryParseTenantDevice(topic, out var tenantId, out var deviceId, out var sensorId))
                 return false;
 
             if (!TryParseValue(payload, out var value))
                 return false;
 
-            command = new HandleWaterLevelCommand(tenantId, deviceId, value);
+            command = new HandleWaterLevelCommand(tenantId, deviceId,sensorId, value);
             return true;
         }
 
@@ -49,13 +49,13 @@ namespace Asn.Diplomski.Server.Mqtt
         {
             command = default!;
 
-            if (!MqttTopics.TryParseTenantDevice(topic, out var tenantId, out var deviceId))
+            if (!MqttTopics.TryParseTenantDevice(topic, out var tenantId, out var deviceId, out var sensorId))
                 return false;
 
             if (!TryParseValue(payload, out var value))
                 return false;
 
-            command = new HandleTemperatureCommand(tenantId, deviceId, value);
+            command = new HandleTemperatureCommand(tenantId, deviceId, sensorId, value);
             return true;
         }
 
