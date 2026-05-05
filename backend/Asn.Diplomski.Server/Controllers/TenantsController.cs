@@ -1,3 +1,5 @@
+using Asn.Diplomski.Application.UseCases.ConnectDevice;
+using Asn.Diplomski.Application.UseCases.ConnectTenant;
 using Asn.Diplomski.Application.UseCases.CreateTenant;
 using Asn.Diplomski.Application.UseCases.GetTenantById;
 using Asn.Diplomski.Domain.Entities;
@@ -17,15 +19,18 @@ namespace Asn.Diplomski.Server.Controllers
         private readonly CreateTenantHandler _createTenantHandler;
         private readonly GetTenantByIdHandler _getTenantByIdHandler;
         private readonly ILogger<TenantsController> _logger;
+        private readonly ConnectTenantHandler _connectTenantHandler;
 
         public TenantsController(
             CreateTenantHandler createTenantHandler,
             GetTenantByIdHandler getTenantByIdHandler,
-            ILogger<TenantsController> logger)
+            ILogger<TenantsController> logger,
+            ConnectTenantHandler connectTenantHandler)
         {
             _createTenantHandler = createTenantHandler;
             _getTenantByIdHandler = getTenantByIdHandler;
             _logger = logger;
+            _connectTenantHandler = connectTenantHandler;
         }
 
         /// <summary>
@@ -87,6 +92,34 @@ namespace Asn.Diplomski.Server.Controllers
                 return NotFound(new { message = $"Tenant s ID-em '{id}' nije pronađen." });
 
             return Ok(MapToResponse(tenant));
+        }
+
+        /// <summary>
+        /// Registracija tenantovih uređaja na broker — mikrokontroler poziva ovaj endpoint pri pokretanju.
+        /// Server se pretplaćuje na MQTT topic tenantovih uređaja i počinje primati podatke senzora.
+        /// </summary>
+        /// <param name="id">Device ID</param>
+        /// <response code="200">Pretplata aktivna, server sluša poruke uređaja</response>
+        /// <response code="404">Uređaj ne postoji</response>
+        [HttpPost("{id:long}/connect")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Connect(long id)
+        {
+            var result = await _connectTenantHandler.HandleAsync(id);
+
+            if (result.IsNotFound)
+            {
+                _logger.LogWarning(
+                    "Connect zahtjev odbijen — uređaj s ID-em {DeviceId} ne postoji.", id);
+                return NotFound(new { message = $"Uređaj s ID-em '{id}' ne postoji." });
+            }
+
+            return Ok(new
+            {
+                message = "Pretplata aktivna.",
+                topics = result.Topics
+            });
         }
 
         // ── Mapper ──────────────────────────────────────────────

@@ -34,15 +34,15 @@ docker logs -f asn-mosquitto
 ## MQTT — Topic struktura
 
 ```
-{tenantId}/{deviceId}/sensor/{sensorType}
+tenant_{tenantId}/device_{deviceId}/sensor/{sensorType}
 ```
 
 Primjer sa seed tenantom (ID = 1, auto-increment) i stvarnim device ID-em:
 ```
-1/{deviceId}/sensor/temperature
-1/{deviceId}/sensor/soilmoisture
-1/{deviceId}/sensor/waterlevel
-1/{deviceId}/sensor/pumpcommand
+tenant_{tenantId}/device_{deviceId}/sensor/temperature
+tenant_{tenantId}/device_{deviceId}/sensor/soilmoisture
+tenant_{tenantId}/device_{deviceId}/sensor/waterlevel
+tenant_{tenantId}/device_{deviceId}/sensor/pumpcommand
 ```
 
 ---

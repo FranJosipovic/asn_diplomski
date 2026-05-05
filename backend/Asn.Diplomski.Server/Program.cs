@@ -11,6 +11,9 @@ using Asn.Diplomski.Server;
 using Asn.Diplomski.Server.Mqtt;
 using Microsoft.OpenApi;
 using System.Reflection;
+using Asn.Diplomski.Rdbm.Repositories;
+using Asn.Diplomski.Application.UseCases.ConnectTenant;
+using Asn.Diplomski.Application.UseCases.HandleTemperature;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,13 +45,19 @@ builder.Services.AddHostedService<MqttOutgoingWorker>();
 builder.Services.AddScoped<CreateDeviceWithSensorsHandler>();
 builder.Services.AddScoped<CreateTenantHandler>();
 builder.Services.AddScoped<GetTenantByIdHandler>();
+builder.Services.AddScoped<ConnectTenantHandler>();
 builder.Services.AddScoped<ConnectDeviceHandler>();
 builder.Services.AddScoped<HandleSoilMoistureHandler>();
 builder.Services.AddScoped<HandleWaterLevelHandler>();
+builder.Services.AddScoped<HandleTemperatureHandler>();
 
 // ── Controllers ─────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// ── Repositories ─────────────────────────────────────────────
+builder.Services.AddScoped<ITemperatureReadingRepository, TemperatureReadingRepository>();
+builder.Services.AddScoped<ISoilMoistureReadingRepository, SoilMoistureReadingRepository>();
 
 // ── Swagger ─────────────────────────────────────────────────
 builder.Services.AddSwaggerGen(c =>

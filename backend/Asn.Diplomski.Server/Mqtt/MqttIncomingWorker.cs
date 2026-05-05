@@ -1,4 +1,6 @@
+using Asn.Diplomski.Application.Mqtt;
 using Asn.Diplomski.Application.UseCases.HandleSoilMoisture;
+using Asn.Diplomski.Application.UseCases.HandleTemperature;
 using Asn.Diplomski.Application.UseCases.HandleWaterLevel;
 
 namespace Asn.Diplomski.Server.Mqtt
@@ -42,21 +44,29 @@ namespace Asn.Diplomski.Server.Mqtt
             switch (slug)
             {
                 case MqttTopics.SlugSoilMoisture:
-                {
-                    if (!MqttMessageMapper.TryMapToSoilMoisture(msg.Topic, msg.Payload, out var cmd))
+                    {
+                        if (!MqttMessageMapper.TryMapToSoilMoisture(msg.Topic, msg.Payload, out var cmd))
+                            break;
+                        using var scope = _scopeFactory.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<HandleSoilMoistureHandler>().HandleAsync(cmd);
                         break;
-                    using var scope = _scopeFactory.CreateScope();
-                    await scope.ServiceProvider.GetRequiredService<HandleSoilMoistureHandler>().HandleAsync(cmd);
-                    break;
-                }
+                    }
                 case MqttTopics.SlugWaterLevel:
-                {
-                    if (!MqttMessageMapper.TryMapToWaterLevel(msg.Topic, msg.Payload, out var cmd))
+                    {
+                        if (!MqttMessageMapper.TryMapToWaterLevel(msg.Topic, msg.Payload, out var cmd))
+                            break;
+                        using var scope = _scopeFactory.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<HandleWaterLevelHandler>().HandleAsync(cmd);
                         break;
-                    using var scope = _scopeFactory.CreateScope();
-                    await scope.ServiceProvider.GetRequiredService<HandleWaterLevelHandler>().HandleAsync(cmd);
-                    break;
-                }
+                    }
+                case MqttTopics.SlugTemperature:
+                    {
+                        if (!MqttMessageMapper.TryMapToTemperature(msg.Topic, msg.Payload, out var cmd))
+                            break;
+                        using var scope = _scopeFactory.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<HandleTemperatureHandler>().HandleAsync(cmd);
+                        break;
+                    }
                 default:
                     _logger.LogDebug(
                         "MQTT poruka nije mapirana ni na jedan use case — topic: '{Topic}'", msg.Topic);

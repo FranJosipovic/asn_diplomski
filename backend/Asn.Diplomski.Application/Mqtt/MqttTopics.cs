@@ -1,8 +1,8 @@
 using Asn.Diplomski.Domain.Entities.Enums;
 
-namespace Asn.Diplomski.Server.Mqtt
+namespace Asn.Diplomski.Application.Mqtt
 {
-    internal static class MqttTopics
+    public static class MqttTopics
     {
         public const string SlugSoilMoisture = "soil";
         public const string SlugWaterLevel   = "water-level";

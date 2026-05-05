@@ -3,6 +3,7 @@ using System;
 using Asn.Diplomski.Rdbm;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Asn.Diplomski.Rdbm.Migrations
 {
     [DbContext(typeof(AsnDbContext))]
-    partial class AsnDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260504192837_Step002_SensorReadings")]
+    partial class Step002_SensorReadings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -125,9 +128,9 @@ namespace Asn.Diplomski.Rdbm.Migrations
                     b.Property<long>("SensorId")
                         .HasColumnType("bigint");
 
-                    b.Property<double>("Value")
+                    b.Property<decimal>("Value")
                         .HasPrecision(5, 2)
-                        .HasColumnType("double precision");
+                        .HasColumnType("numeric(5,2)");
 
                     b.HasKey("Id");
 
@@ -150,9 +153,9 @@ namespace Asn.Diplomski.Rdbm.Migrations
                     b.Property<long>("SensorId")
                         .HasColumnType("bigint");
 
-                    b.Property<double>("Value")
+                    b.Property<decimal>("Value")
                         .HasPrecision(6, 2)
-                        .HasColumnType("double precision");
+                        .HasColumnType("numeric(6,2)");
 
                     b.HasKey("Id");
 

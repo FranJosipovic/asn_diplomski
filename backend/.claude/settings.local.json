@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\backend\" -Recurse -Name)",
+      "Bash(dotnet ef *)"
+    ]
+  }
+}

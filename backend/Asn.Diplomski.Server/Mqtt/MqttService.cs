@@ -1,4 +1,5 @@
 using Asn.Diplomski.Application.Interfaces;
+using Asn.Diplomski.Application.Mqtt;
 using Asn.Diplomski.Domain.Entities;
 using Asn.Diplomski.Domain.Entities.Enums;
 using MQTTnet;

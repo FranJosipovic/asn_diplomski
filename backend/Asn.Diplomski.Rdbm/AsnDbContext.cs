@@ -11,12 +11,16 @@ namespace Asn.Diplomski.Rdbm
         public DbSet<Tenant> Tenants => Set<Tenant>();
         public DbSet<Device> Devices => Set<Device>();
         public DbSet<Sensor> Sensors => Set<Sensor>();
+        public DbSet<TemperatureReading> TemperatureReadings => Set<TemperatureReading>();
+        public DbSet<SoilMoistureReading> SoilMoistureReadings => Set<SoilMoistureReading>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfiguration(new TenantConfiguration());
             modelBuilder.ApplyConfiguration(new DeviceConfiguration());
             modelBuilder.ApplyConfiguration(new SensorConfiguration());
+            modelBuilder.ApplyConfiguration(new TemperatureReadingConfiguration());
+            modelBuilder.ApplyConfiguration(new SoilMoistureReadingConfiguration());
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

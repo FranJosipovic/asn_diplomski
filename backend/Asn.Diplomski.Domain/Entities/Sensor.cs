@@ -24,5 +24,7 @@ namespace Asn.Diplomski.Domain.Entities
 
         // Navigation
         public Device Device { get; set; } = null!;
+        public ICollection<TemperatureReading> TemperatureReadings { get; set; } = new List<TemperatureReading>();
+        public ICollection<SoilMoistureReading> SoilMoistureReadings { get; set; } = new List<SoilMoistureReading>();
     }
 }

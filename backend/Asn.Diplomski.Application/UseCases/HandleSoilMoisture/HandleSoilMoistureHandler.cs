@@ -1,4 +1,5 @@
 using Asn.Diplomski.Application.Interfaces;
+using Asn.Diplomski.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Asn.Diplomski.Application.UseCases.HandleSoilMoisture
@@ -7,17 +8,30 @@ namespace Asn.Diplomski.Application.UseCases.HandleSoilMoisture
     {
         private readonly IMqttPublisher _mqttPublisher;
         private readonly ILogger<HandleSoilMoistureHandler> _logger;
+        private readonly ISoilMoistureReadingRepository _soilMoistureReadingRepository;
 
         public HandleSoilMoistureHandler(
             IMqttPublisher mqttPublisher,
-            ILogger<HandleSoilMoistureHandler> logger)
+            ILogger<HandleSoilMoistureHandler> logger,
+            ISoilMoistureReadingRepository soilMoistureReadingRepository)
         {
             _mqttPublisher = mqttPublisher;
             _logger = logger;
+            _soilMoistureReadingRepository = soilMoistureReadingRepository;
         }
 
-        public Task HandleAsync(HandleSoilMoistureCommand command)
+        public async Task HandleAsync(HandleSoilMoistureCommand command)
         {
+            //Insert into db
+            var reading = new SoilMoistureReading
+            {
+                SensorId = command.DeviceId,
+                Value = command.Value,
+                RecordedAt = DateTime.UtcNow
+            };
+
+            await _soilMoistureReadingRepository.AddAsync(reading);
+
             // TODO: load threshold per device from DB/config
             const double threshold = 30.0;
 
@@ -36,8 +50,6 @@ namespace Asn.Diplomski.Application.UseCases.HandleSoilMoisture
                     timestamp = DateTime.UtcNow
                 });
             }
-
-            return Task.CompletedTask;
         }
     }
 }
