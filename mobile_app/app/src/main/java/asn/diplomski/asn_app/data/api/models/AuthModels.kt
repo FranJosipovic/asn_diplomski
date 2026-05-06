@@ -6,5 +6,19 @@ data class SignInRequest(
 )
 
 data class SignInResponse(
-    val token: String
+    val tenantId: Long,
+    val email: String,
+    val accessToken: String,
+    val refreshToken: String,
+    val refreshTokenExpiresAt: String
+)
+
+data class RefreshTokenRequest(
+    val refreshToken: String
+)
+
+data class RefreshTokenResponse(
+    val accessToken: String,
+    val refreshToken: String,
+    val refreshTokenExpiresAt: String
 )

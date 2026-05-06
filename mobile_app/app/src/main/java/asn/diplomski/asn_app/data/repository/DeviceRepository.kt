@@ -1,28 +1,29 @@
 package asn.diplomski.asn_app.data.repository
 
+import android.util.Log
 import asn.diplomski.asn_app.data.TokenManager
 import asn.diplomski.asn_app.data.api.AsnApi
 import asn.diplomski.asn_app.domain.model.Device
 import asn.diplomski.asn_app.domain.model.Sensor
 import asn.diplomski.asn_app.domain.model.ProvisionConfig
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "DeviceRepository"
 
 @Singleton
 class DeviceRepository @Inject constructor(
     private val api: AsnApi,
     private val tokenManager: TokenManager
 ) {
-    fun getDevices(tenantId: Long, token: String?): Flow<Result<List<Device>>> = flow {
-        try {
-            val authHeader = tokenManager.getAuthorizationHeader(token)
-            if (authHeader == null) {
-                emit(Result.failure(Exception("No token available")))
-                return@flow
-            }
-
+    suspend fun getDevices(tenantId: Long, token: String?): Result<List<Device>> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+        if (authHeader == null) {
+            Log.w(TAG, "getDevices: no token available")
+            return Result.failure(Exception("No token available"))
+        }
+        return try {
+            Log.d(TAG, "getDevices: fetching tenant $tenantId")
             val tenantResponse = api.getTenant(tenantId, authHeader)
             val devices = tenantResponse.devices.map { device ->
                 Device(
@@ -45,30 +46,34 @@ class DeviceRepository @Inject constructor(
                     }
                 )
             }
-            emit(Result.success(devices))
+            Log.d(TAG, "getDevices: got ${devices.size} devices")
+            Result.success(devices)
         } catch (e: Exception) {
-            emit(Result.failure(e))
+            Log.e(TAG, "getDevices: failed", e)
+            Result.failure(e)
         }
     }
 
-    fun getProvisionConfig(token: String?): Flow<Result<ProvisionConfig>> = flow {
-        try {
-            val authHeader = tokenManager.getAuthorizationHeader(token)
-            if (authHeader == null) {
-                emit(Result.failure(Exception("No token available")))
-                return@flow
-            }
-
-            val response = api.getProvisionConfig(authHeader)
+    suspend fun getProvisionConfig(token: String?): Result<ProvisionConfig> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+        if (authHeader == null) {
+            Log.w(TAG, "getProvisionConfig: no token available")
+            return Result.failure(Exception("No token available"))
+        }
+        return try {
+            Log.d(TAG, "getProvisionConfig: fetching provisioning config")
+            val response = api.getProvisioningConfig(authHeader)
             val config = ProvisionConfig(
                 mqttHost = response.mqttHost,
                 mqttPort = response.mqttPort,
-                token = response.token,
-                expiresIn = response.expiresIn
+                token = response.provisioningToken,
+                expiresAt = response.expiresAt
             )
-            emit(Result.success(config))
+            Log.d(TAG, "getProvisionConfig: mqtt=${config.mqttHost}:${config.mqttPort}, expires=${config.expiresAt}")
+            Result.success(config)
         } catch (e: Exception) {
-            emit(Result.failure(e))
+            Log.e(TAG, "getProvisionConfig: failed", e)
+            Result.failure(e)
         }
     }
 }

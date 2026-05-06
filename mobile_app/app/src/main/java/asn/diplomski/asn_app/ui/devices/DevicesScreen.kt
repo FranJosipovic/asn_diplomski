@@ -24,15 +24,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import asn.diplomski.asn_app.domain.model.Device
 
 @Composable
 internal fun DevicesRoute(
     tenantId: Long,
+    onNavigateToProvisioning: (deviceId: Long) -> Unit,
     viewModel: DevicesViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(tenantId) {
         viewModel.onAction(DevicesAction.LoadDevices(tenantId))
@@ -40,14 +41,14 @@ internal fun DevicesRoute(
 
     DevicesScreen(
         uiState = uiState,
-        onAction = viewModel::onAction
+        onProvision = onNavigateToProvisioning
     )
 }
 
 @Composable
 internal fun DevicesScreen(
     uiState: DevicesUiState,
-    onAction: (DevicesAction) -> Unit
+    onProvision: (deviceId: Long) -> Unit
 ) {
     Box(
         modifier = Modifier.fillMaxSize()
@@ -85,7 +86,7 @@ internal fun DevicesScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text("Host: ${uiState.provisionConfig.mqttHost}")
                                 Text("Port: ${uiState.provisionConfig.mqttPort}")
-                                Text("Token expires in: ${uiState.provisionConfig.expiresIn}ms")
+                                Text("Token expires at: ${uiState.provisionConfig.expiresAt}")
                             }
                         }
                     }
@@ -98,9 +99,7 @@ internal fun DevicesScreen(
                         items(uiState.devices) { device ->
                             DeviceCard(
                                 device = device,
-                                onProvision = {
-                                    onAction(DevicesAction.StartProvisioning(device.id))
-                                }
+                                onProvision = { onProvision(device.id) }
                             )
                         }
                     }
@@ -144,7 +143,7 @@ private fun DeviceCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = device.description,
+                        text = device.description ?: "Device ${device.deviceNumber}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

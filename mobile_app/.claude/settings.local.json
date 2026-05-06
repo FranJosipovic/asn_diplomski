@@ -3,7 +3,10 @@
     "allow": [
       "Bash(./gradlew clean *)",
       "Bash(./gradlew build *)",
-      "Bash(grep -E \"\\(^e:|^BUILD|>|^$\\)\")"
+      "Bash(grep -E \"\\(^e:|^BUILD|>|^$\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api *)"
     ]
   }
 }

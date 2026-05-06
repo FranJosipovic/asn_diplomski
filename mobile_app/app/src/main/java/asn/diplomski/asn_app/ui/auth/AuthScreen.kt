@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,14 +23,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 
 @Composable
 internal fun AuthRoute(
     onNavigateToDevices: (tenantId: Long) -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsState()
     AuthScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
@@ -48,7 +49,9 @@ internal fun AuthScreen(
 
     when (uiState) {
         is AuthUiState.Success -> {
-            onNavigateToDevices(uiState.tenantId)
+            LaunchedEffect(uiState.tenantId) {
+                onNavigateToDevices(uiState.tenantId)
+            }
         }
         else -> {
             Column(

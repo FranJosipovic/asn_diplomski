@@ -1,8 +1,8 @@
 package asn.diplomski.asn_app.data.api.models
 
-data class ProvisionResponse(
+data class ProvisioningTokenResponse(
+    val provisioningToken: String,
+    val expiresAt: String,
     val mqttHost: String,
-    val mqttPort: Int,
-    val token: String,
-    val expiresIn: Long
+    val mqttPort: Int
 )

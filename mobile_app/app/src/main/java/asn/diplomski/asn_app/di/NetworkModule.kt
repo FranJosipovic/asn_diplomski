@@ -1,5 +1,6 @@
 package asn.diplomski.asn_app.di
 
+import asn.diplomski.asn_app.BuildConfig
 import asn.diplomski.asn_app.data.api.AsnApi
 import dagger.Module
 import dagger.Provides
@@ -14,8 +15,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-
-    private const val BASE_URL = "http://10.0.2.2:5017"
 
     @Singleton
     @Provides
@@ -33,7 +32,7 @@ object NetworkModule {
     @Provides
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BuildConfig.BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
