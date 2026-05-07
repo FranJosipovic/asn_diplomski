@@ -6,7 +6,8 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\backend\" -Recurse -Filter \"*.cs\")",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
-      "Bash(dotnet build *)"
+      "Bash(dotnet build *)",
+      "Bash(xargs grep -l \"CreateDevice\\\\|new Device\")"
     ]
   }
 }

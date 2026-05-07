@@ -1,4 +1,5 @@
 using Asn.Diplomski.Application.UseCases.ConnectDevice;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asn.Diplomski.Server.Controllers
@@ -6,6 +7,7 @@ namespace Asn.Diplomski.Server.Controllers
     /// <summary>
     /// Upravljanje uređajima (mikrokontroleri)
     /// </summary>
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
@@ -29,6 +31,7 @@ namespace Asn.Diplomski.Server.Controllers
         /// <param name="id">Device ID</param>
         /// <response code="200">Pretplata aktivna, server sluša poruke uređaja</response>
         /// <response code="404">Uređaj ne postoji</response>
+        [AllowAnonymous]
         [HttpPost("{id:long}/connect")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

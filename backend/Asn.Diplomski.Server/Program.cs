@@ -1,21 +1,29 @@
 using Asn.Diplomski.Application.Interfaces;
 using Asn.Diplomski.Application.UseCases.ConnectDevice;
-using Microsoft.EntityFrameworkCore;
+using Asn.Diplomski.Application.UseCases.ConnectTenant;
 using Asn.Diplomski.Application.UseCases.CreateDeviceWithSensors;
 using Asn.Diplomski.Application.UseCases.CreateTenant;
+using Asn.Diplomski.Application.UseCases.CompleteDeviceProvisioning;
+using Asn.Diplomski.Application.UseCases.GetProvisioningToken;
+using Asn.Diplomski.Application.UseCases.GetSoilMoistureReadings;
+using Asn.Diplomski.Application.UseCases.GetTemperatureReadings;
 using Asn.Diplomski.Application.UseCases.GetTenantById;
 using Asn.Diplomski.Application.UseCases.HandleSoilMoisture;
+using Asn.Diplomski.Application.UseCases.HandleTemperature;
 using Asn.Diplomski.Application.UseCases.HandleWaterLevel;
+using Asn.Diplomski.Application.UseCases.RefreshToken;
+using Asn.Diplomski.Application.UseCases.SignIn;
 using Asn.Diplomski.Rdbm;
+using Asn.Diplomski.Rdbm.Repositories;
 using Asn.Diplomski.Server;
 using Asn.Diplomski.Server.Mqtt;
+using Asn.Diplomski.Server.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Reflection;
-using Asn.Diplomski.Rdbm.Repositories;
-using Asn.Diplomski.Application.UseCases.ConnectTenant;
-using Asn.Diplomski.Application.UseCases.HandleTemperature;
-using Asn.Diplomski.Application.UseCases.GetTemperatureReadings;
-using Asn.Diplomski.Application.UseCases.GetSoilMoistureReadings;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +62,35 @@ builder.Services.AddScoped<HandleWaterLevelHandler>();
 builder.Services.AddScoped<HandleTemperatureHandler>();
 builder.Services.AddScoped<GetTemperatureReadingsHandler>();
 builder.Services.AddScoped<GetSoilMoistureReadingsHandler>();
+builder.Services.AddScoped<SignInHandler>();
+builder.Services.AddScoped<RefreshTokenHandler>();
+builder.Services.AddScoped<GetProvisioningTokenHandler>();
+builder.Services.AddScoped<CompleteDeviceProvisioningHandler>();
+
+// ── Authentication / Authorization ──────────────────────────
+builder.Services.AddScoped<ITokenService, TokenService>();
+
+var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret not configured");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer not configured");
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience not configured");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // ── Controllers ─────────────────────────────────────────────
 builder.Services.AddControllers();
@@ -73,6 +110,23 @@ builder.Services.AddSwaggerGen(c =>
         Description = "IoT navodnjavanje — SaaS backend"
     });
 
+    // JWT Authorization
+    var securityScheme = new OpenApiSecurityScheme
+    {
+        Name = "JWT Authentication",
+        Description = "Enter JWT token",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    };
+    c.AddSecurityDefinition("bearer", securityScheme);
+
+    c.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("bearer", document)] = []
+    });
+
     // XML komentari (opcionalno, ali preporučeno)
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
@@ -89,9 +143,9 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 
     var createTenantHandler = scope.ServiceProvider.GetRequiredService<CreateTenantHandler>();
-    var tenantRepository    = scope.ServiceProvider.GetRequiredService<ITenantRepository>();
-    var loggerFactory       = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-    var seederLogger        = loggerFactory.CreateLogger(nameof(DbSeeder));
+    var tenantRepository = scope.ServiceProvider.GetRequiredService<ITenantRepository>();
+    var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+    var seederLogger = loggerFactory.CreateLogger(nameof(DbSeeder));
 
     await DbSeeder.SeedAsync(createTenantHandler, tenantRepository, seederLogger);
 }
@@ -110,6 +164,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

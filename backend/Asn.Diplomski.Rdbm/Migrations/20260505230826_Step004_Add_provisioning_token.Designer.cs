@@ -3,6 +3,7 @@ using System;
 using Asn.Diplomski.Rdbm;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Asn.Diplomski.Rdbm.Migrations
 {
     [DbContext(typeof(AsnDbContext))]
-    partial class AsnDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260505230826_Step004_Add_provisioning_token")]
+    partial class Step004_Add_provisioning_token
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -53,15 +56,6 @@ namespace Asn.Diplomski.Rdbm.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<DateTime?>("LastSeenAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ProvisionStatus")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ProvisioningToken")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ProvisioningTokenExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("TenantId")
@@ -228,6 +222,12 @@ namespace Asn.Diplomski.Rdbm.Migrations
                     b.Property<string>("PostalCode")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ProvisioningToken")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ProvisioningTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("RefreshToken")
                         .HasMaxLength(512)

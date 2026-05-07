@@ -3,6 +3,7 @@ package asn.diplomski.asn_app.domain.model
 data class Device(
     val id: Long,
     val type: Int,
+    val provisionStatus: String?,
     val deviceNumber: Int,
     val description: String?,
     val isActive: Boolean,
@@ -20,9 +21,10 @@ data class Sensor(
     val createdAt: String
 )
 
-data class ProvisionConfig(
-    val mqttHost: String,
-    val mqttPort: Int,
-    val token: String,
-    val expiresAt: String
+data class DeviceProvisionInfo(
+    val deviceId: Long,
+    val deviceSsid: String,
+    val provisioningToken: String,
+    val serverHost: String,
+    val serverPort: Int
 )

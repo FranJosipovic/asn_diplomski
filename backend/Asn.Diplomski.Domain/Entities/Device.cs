@@ -20,6 +20,11 @@ namespace Asn.Diplomski.Domain.Entities
 
         public bool IsActive { get; set; } = true;
 
+        // Provisioning
+        public ProvisionStatus ProvisionStatus { get; set; } = ProvisionStatus.NotProvisioned;
+        public string? ProvisioningToken { get; set; }
+        public DateTime? ProvisioningTokenExpiresAt { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime? LastSeenAt { get; set; }
 

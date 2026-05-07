@@ -1,6 +1,7 @@
 using Asn.Diplomski.Application.UseCases.GetSoilMoistureReadings;
 using Asn.Diplomski.Application.UseCases.GetTemperatureReadings;
 using Asn.Diplomski.Server.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asn.Diplomski.Server.Controllers
@@ -8,6 +9,7 @@ namespace Asn.Diplomski.Server.Controllers
     /// <summary>
     /// Dohvat očitanja senzora
     /// </summary>
+    [Authorize]
     [ApiController]
     [Route("api/sensors")]
     [Produces("application/json")]

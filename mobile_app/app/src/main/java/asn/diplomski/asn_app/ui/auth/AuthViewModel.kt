@@ -2,10 +2,12 @@ package asn.diplomski.asn_app.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import asn.diplomski.asn_app.data.TokenManager
 import asn.diplomski.asn_app.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,11 +24,24 @@ sealed interface AuthAction {
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val tokenManager: TokenManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
+    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Loading)
     val uiState = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val token = tokenManager.tokenFlow.firstOrNull()
+            val tenantId = tokenManager.getTenantIdFromToken(token)
+            _uiState.value = if (tenantId != null) {
+                AuthUiState.Success(tenantId)
+            } else {
+                AuthUiState.Idle
+            }
+        }
+    }
 
     fun onAction(action: AuthAction) {
         when (action) {

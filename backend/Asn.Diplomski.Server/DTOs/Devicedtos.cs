@@ -6,6 +6,7 @@ namespace Asn.Diplomski.Server.DTOs
     {
         public long Id { get; set; }
         public DeviceType Type { get; set; }
+        public ProvisionStatus ProvisionStatus { get; set; }
         public int DeviceNumber { get; set; }
         public string? Description { get; set; }
         public bool IsActive { get; set; }

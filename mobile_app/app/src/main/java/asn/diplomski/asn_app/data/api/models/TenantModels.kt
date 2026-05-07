@@ -20,11 +20,12 @@ data class TenantResponse(
 data class DeviceResponse(
     val id: Long,
     val type: Int,
+    val provisionStatus: String?,
     val deviceNumber: Int,
-    val description: String,
+    val description: String?,
     val isActive: Boolean,
     val createdAt: String,
-    val lastSeenAt: String,
+    val lastSeenAt: String?,
     val sensors: List<SensorResponse>
 )
 

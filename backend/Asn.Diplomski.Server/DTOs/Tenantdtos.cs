@@ -29,7 +29,38 @@ namespace Asn.Diplomski.Server.DTOs
         [MaxLength(100)] public string? Country { get; set; }
     }
 
+    public class SignInRequestDto
+    {
+        [Required, EmailAddress, MaxLength(320)]
+        public string Email { get; set; } = null!;
+
+        [Required, MinLength(8), MaxLength(100)]
+        public string Password { get; set; } = null!;
+    }
+
     // ── Response ─────────────────────────────────────────────────
+
+    public class SignInResponseDto
+    {
+        public long TenantId { get; set; }
+        public string Email { get; set; } = null!;
+        public string AccessToken { get; set; } = null!;
+        public string RefreshToken { get; set; } = null!;
+        public DateTime RefreshTokenExpiresAt { get; set; }
+    }
+
+    public class RefreshTokenRequestDto
+    {
+        [Required]
+        public string RefreshToken { get; set; } = null!;
+    }
+
+    public class RefreshTokenResponseDto
+    {
+        public string AccessToken { get; set; } = null!;
+        public string RefreshToken { get; set; } = null!;
+        public DateTime RefreshTokenExpiresAt { get; set; }
+    }
 
     public class TenantResponse
     {
@@ -53,5 +84,38 @@ namespace Asn.Diplomski.Server.DTOs
 
         // Devices
         public List<DeviceResponse> Devices { get; set; } = [];
+    }
+
+    public class ProvisioningTokenResponseDto
+    {
+        public DateTime ExpiresAt { get; set; }
+        public string ServerHost { get; set; } = null!;
+        public int ServerPort { get; set; }
+        public List<DeviceProvisioningDto> Devices { get; set; } = [];
+    }
+
+    public class DeviceProvisioningDto
+    {
+        public long DeviceId { get; set; }
+        public string DeviceType { get; set; } = null!;
+        public string DeviceSsid { get; set; } = null!;
+        public string ProvisionStatus { get; set; } = null!;
+        public string ProvisioningToken { get; set; } = null!;
+        public List<SensorProvisioningDto> Sensors { get; set; } = [];
+    }
+
+    public class SensorProvisioningDto
+    {
+        public long SensorId { get; set; }
+        public string SensorType { get; set; } = null!;
+    }
+
+    public class CompleteProvisioningResponseDto
+    {
+        public long TenantId { get; set; }
+        public long DeviceId { get; set; }
+        public string MqttHost { get; set; } = null!;
+        public int MqttPort { get; set; }
+        public List<SensorProvisioningDto> Sensors { get; set; } = [];
     }
 }

@@ -4,8 +4,8 @@ import android.util.Log
 import asn.diplomski.asn_app.data.TokenManager
 import asn.diplomski.asn_app.data.api.AsnApi
 import asn.diplomski.asn_app.domain.model.Device
+import asn.diplomski.asn_app.domain.model.DeviceProvisionInfo
 import asn.diplomski.asn_app.domain.model.Sensor
-import asn.diplomski.asn_app.domain.model.ProvisionConfig
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,19 +16,20 @@ class DeviceRepository @Inject constructor(
     private val api: AsnApi,
     private val tokenManager: TokenManager
 ) {
-    suspend fun getDevices(tenantId: Long, token: String?): Result<List<Device>> {
+    suspend fun getDevices(token: String?): Result<List<Device>> {
         val authHeader = tokenManager.getAuthorizationHeader(token)
         if (authHeader == null) {
             Log.w(TAG, "getDevices: no token available")
             return Result.failure(Exception("No token available"))
         }
         return try {
-            Log.d(TAG, "getDevices: fetching tenant $tenantId")
-            val tenantResponse = api.getTenant(tenantId, authHeader)
+            Log.d(TAG, "getDevices: fetching /api/tenants/me")
+            val tenantResponse = api.getTenant(authHeader)
             val devices = tenantResponse.devices.map { device ->
                 Device(
                     id = device.id,
                     type = device.type,
+                    provisionStatus = device.provisionStatus ?: "NotProvisioned",
                     deviceNumber = device.deviceNumber,
                     description = device.description,
                     isActive = device.isActive,
@@ -54,25 +55,28 @@ class DeviceRepository @Inject constructor(
         }
     }
 
-    suspend fun getProvisionConfig(token: String?): Result<ProvisionConfig> {
+    suspend fun getDeviceProvisionInfo(deviceId: Long, token: String?): Result<DeviceProvisionInfo> {
         val authHeader = tokenManager.getAuthorizationHeader(token)
         if (authHeader == null) {
-            Log.w(TAG, "getProvisionConfig: no token available")
+            Log.w(TAG, "getDeviceProvisionInfo: no token available")
             return Result.failure(Exception("No token available"))
         }
         return try {
-            Log.d(TAG, "getProvisionConfig: fetching provisioning config")
+            Log.d(TAG, "getDeviceProvisionInfo: fetching /api/provision for deviceId=$deviceId")
             val response = api.getProvisioningConfig(authHeader)
-            val config = ProvisionConfig(
-                mqttHost = response.mqttHost,
-                mqttPort = response.mqttPort,
-                token = response.provisioningToken,
-                expiresAt = response.expiresAt
+            val device = response.devices.find { it.deviceId == deviceId }
+                ?: return Result.failure(Exception("Device $deviceId not found in provisioning response"))
+            val info = DeviceProvisionInfo(
+                deviceId = device.deviceId,
+                deviceSsid = device.deviceSsid,
+                provisioningToken = device.provisioningToken,
+                serverHost = response.serverHost,
+                serverPort = response.serverPort
             )
-            Log.d(TAG, "getProvisionConfig: mqtt=${config.mqttHost}:${config.mqttPort}, expires=${config.expiresAt}")
-            Result.success(config)
+            Log.d(TAG, "getDeviceProvisionInfo: ssid=${info.deviceSsid}, host=${info.serverHost}:${info.serverPort}")
+            Result.success(info)
         } catch (e: Exception) {
-            Log.e(TAG, "getProvisionConfig: failed", e)
+            Log.e(TAG, "getDeviceProvisionInfo: failed", e)
             Result.failure(e)
         }
     }

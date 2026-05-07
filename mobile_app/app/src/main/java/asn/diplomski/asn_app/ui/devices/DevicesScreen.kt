@@ -18,13 +18,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.runtime.collectAsState
 import asn.diplomski.asn_app.domain.model.Device
 
 @Composable
@@ -50,14 +50,10 @@ internal fun DevicesScreen(
     uiState: DevicesUiState,
     onProvision: (deviceId: Long) -> Unit
 ) {
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         when (uiState) {
             is DevicesUiState.Loading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
             is DevicesUiState.Success -> {
                 Column(
@@ -65,37 +61,9 @@ internal fun DevicesScreen(
                         .fillMaxSize()
                         .padding(16.dp)
                 ) {
-                    Text(
-                        text = "Devices",
-                        style = MaterialTheme.typography.headlineLarge
-                    )
-
-                    if (uiState.provisionConfig != null) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Card(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    text = "MQTT Configuration",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Host: ${uiState.provisionConfig.mqttHost}")
-                                Text("Port: ${uiState.provisionConfig.mqttPort}")
-                                Text("Token expires at: ${uiState.provisionConfig.expiresAt}")
-                            }
-                        }
-                    }
-
+                    Text(text = "Devices", style = MaterialTheme.typography.headlineLarge)
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(uiState.devices) { device ->
                             DeviceCard(
                                 device = device,
@@ -113,10 +81,7 @@ internal fun DevicesScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "Error: ${uiState.message}",
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Text(text = uiState.message, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -124,44 +89,39 @@ internal fun DevicesScreen(
 }
 
 @Composable
-private fun DeviceCard(
-    device: Device,
-    onProvision: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+private fun DeviceCard(device: Device, onProvision: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = device.description ?: "Device ${device.deviceNumber}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Device #${device.deviceNumber} (Type: ${device.type})",
+                        text = "Type: ${if (device.type == 1) "SensorUnit" else "PumpUnit"}",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "Status: ${if (device.isActive) "Active" else "Inactive"}",
+                        text = "Status: ${device.provisionStatus ?: "Unknown"}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (device.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        color = when (device.provisionStatus) {
+                            "Provisioned"    -> MaterialTheme.colorScheme.primary
+                            "Provisioning"   -> MaterialTheme.colorScheme.tertiary
+                            else             -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
 
-                Button(
-                    onClick = onProvision
-                ) {
-                    Text("Provision")
+                if (device.provisionStatus != "Provisioned") {
+                    Button(onClick = onProvision) {
+                        Text("Provision")
+                    }
                 }
             }
 
@@ -174,7 +134,7 @@ private fun DeviceCard(
                 )
                 device.sensors.forEach { sensor ->
                     Text(
-                        text = "• ${sensor.description} (Type: ${sensor.type})",
+                        text = "• ${sensor.description ?: "Sensor ${sensor.sensorNumber}"} (Type: ${sensor.type})",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 8.dp, top = 4.dp)
                     )

@@ -4,13 +4,16 @@ using Asn.Diplomski.Application.UseCases.CreateTenant;
 using Asn.Diplomski.Application.UseCases.GetTenantById;
 using Asn.Diplomski.Domain.Entities;
 using Asn.Diplomski.Server.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Asn.Diplomski.Server.Controllers
 {
     /// <summary>
     /// Upravljanje tenantima (kupcima sustava)
     /// </summary>
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
@@ -41,6 +44,7 @@ namespace Asn.Diplomski.Server.Controllers
         /// <response code="201">Tenant uspješno kreiran</response>
         /// <response code="409">Email već postoji</response>
         /// <response code="400">Neispravni podaci</response>
+        [AllowAnonymous]
         [HttpPost]
         [ProducesResponseType(typeof(TenantResponse), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -70,7 +74,6 @@ namespace Asn.Diplomski.Server.Controllers
 
             return CreatedAtAction(
                 nameof(GetById),
-                new { id = result.Tenant!.Id },
                 MapToResponse(result.Tenant!));
         }
 
@@ -81,15 +84,22 @@ namespace Asn.Diplomski.Server.Controllers
         /// <returns>Tenant info</returns>
         /// <response code="200">Tenant pronađen</response>
         /// <response code="404">Tenant ne postoji</response>
-        [HttpGet("{id:long}")]
+        /// <response code="401">Neovlašteni pristup</response>
+        [Authorize]
+        [HttpGet("me")]
         [ProducesResponseType(typeof(TenantResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> GetById(long id)
+        public async Task<IActionResult> GetById()
         {
-            var tenant = await _getTenantByIdHandler.HandleAsync(id);
+            var tenantIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (tenantIdClaim == null || !long.TryParse(tenantIdClaim.Value, out var tenantId))
+                return Unauthorized(new { message = "Ne mogu ekstrahirati tenant ID iz JWT tokena." });
+
+            var tenant = await _getTenantByIdHandler.HandleAsync(tenantId);
 
             if (tenant is null)
-                return NotFound(new { message = $"Tenant s ID-em '{id}' nije pronađen." });
+                return NotFound(new { message = $"Tenant s ID-em '{tenantId}' nije pronađen." });
 
             return Ok(MapToResponse(tenant));
         }
@@ -101,9 +111,12 @@ namespace Asn.Diplomski.Server.Controllers
         /// <param name="id">Device ID</param>
         /// <response code="200">Pretplata aktivna, server sluša poruke uređaja</response>
         /// <response code="404">Uređaj ne postoji</response>
+        /// <response code="401">Neovlašteni pristup</response>
+        [Authorize]
         [HttpPost("{id:long}/connect")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Connect(long id)
         {
             var result = await _connectTenantHandler.HandleAsync(id);
@@ -141,13 +154,14 @@ namespace Asn.Diplomski.Server.Controllers
             Country = t.Country,
             Devices = t.Devices?.Select(d => new DeviceResponse
             {
-                Id           = d.Id,
-                Type         = d.Type,
-                DeviceNumber = d.DeviceNumber,
-                Description  = d.Description,
-                IsActive     = d.IsActive,
-                CreatedAt    = d.CreatedAt,
-                LastSeenAt   = d.LastSeenAt,
+                Id              = d.Id,
+                Type            = d.Type,
+                ProvisionStatus = d.ProvisionStatus,
+                DeviceNumber    = d.DeviceNumber,
+                Description     = d.Description,
+                IsActive        = d.IsActive,
+                CreatedAt       = d.CreatedAt,
+                LastSeenAt      = d.LastSeenAt,
                 Sensors      = d.Sensors?.Select(s => new SensorResponse
                 {
                     Id           = s.Id,

@@ -6,7 +6,8 @@
       "Bash(grep -E \"\\(^e:|^BUILD|>|^$\\)\")",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:github.com)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "Bash(git checkout *)"
     ]
   }
 }

@@ -8,5 +8,8 @@ namespace Asn.Diplomski.Application.Interfaces
         Task<IReadOnlyList<Device>> GetAllActiveWithSensorsAsync();
         Task AddAsync(Device device);
         Task UpdateAsync(Device device);
+        Task UpdateRangeAsync(IList<Device> devices);
+        Task<Device?> GetByProvisioningTokenAsync(string token);
+        Task<Device?> GetByProvisioningTokenIgnoringExpiryAsync(string token);
     }
 }

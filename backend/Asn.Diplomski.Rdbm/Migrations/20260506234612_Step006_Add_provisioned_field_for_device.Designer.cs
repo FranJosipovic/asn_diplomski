@@ -3,6 +3,7 @@ using System;
 using Asn.Diplomski.Rdbm;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Asn.Diplomski.Rdbm.Migrations
 {
     [DbContext(typeof(AsnDbContext))]
-    partial class AsnDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260506234612_Step006_Add_provisioned_field_for_device")]
+    partial class Step006_Add_provisioned_field_for_device
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

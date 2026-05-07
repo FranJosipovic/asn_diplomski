@@ -7,6 +7,9 @@ namespace Asn.Diplomski.Application.Interfaces
         Task<bool> HasAnyAsync();
         Task<bool> EmailExistsAsync(string email);
         Task<Tenant?> GetByIdWithDevicesAndSensorsAsync(long id);
+        Task<Tenant?> GetByEmailAsync(string email);
+        Task<Tenant?> GetByRefreshTokenAsync(string refreshToken);
         Task AddAsync(Tenant tenant);
+        Task UpdateAsync(Tenant tenant);
     }
 }

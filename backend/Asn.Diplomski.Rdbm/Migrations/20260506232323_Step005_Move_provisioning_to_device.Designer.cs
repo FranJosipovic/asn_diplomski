@@ -3,6 +3,7 @@ using System;
 using Asn.Diplomski.Rdbm;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Asn.Diplomski.Rdbm.Migrations
 {
     [DbContext(typeof(AsnDbContext))]
-    partial class AsnDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260506232323_Step005_Move_provisioning_to_device")]
+    partial class Step005_Move_provisioning_to_device
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -54,9 +57,6 @@ namespace Asn.Diplomski.Rdbm.Migrations
 
                     b.Property<DateTime?>("LastSeenAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ProvisionStatus")
-                        .HasColumnType("integer");
 
                     b.Property<string>("ProvisioningToken")
                         .HasColumnType("text");
