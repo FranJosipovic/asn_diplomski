@@ -4,6 +4,7 @@ using Asn.Diplomski.Application.UseCases.ConnectTenant;
 using Asn.Diplomski.Application.UseCases.CreateDeviceWithSensors;
 using Asn.Diplomski.Application.UseCases.CreateTenant;
 using Asn.Diplomski.Application.UseCases.CompleteDeviceProvisioning;
+using Asn.Diplomski.Application.UseCases.ConfirmMqttConnection;
 using Asn.Diplomski.Application.UseCases.GetProvisioningToken;
 using Asn.Diplomski.Application.UseCases.GetSoilMoistureReadings;
 using Asn.Diplomski.Application.UseCases.GetTemperatureReadings;
@@ -66,6 +67,7 @@ builder.Services.AddScoped<SignInHandler>();
 builder.Services.AddScoped<RefreshTokenHandler>();
 builder.Services.AddScoped<GetProvisioningTokenHandler>();
 builder.Services.AddScoped<CompleteDeviceProvisioningHandler>();
+builder.Services.AddScoped<ConfirmMqttConnectionHandler>();
 
 // ── Authentication / Authorization ──────────────────────────
 builder.Services.AddScoped<ITokenService, TokenService>();
@@ -93,7 +95,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // ── Controllers ─────────────────────────────────────────────
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o =>
+        o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 
 // ── Repositories ─────────────────────────────────────────────

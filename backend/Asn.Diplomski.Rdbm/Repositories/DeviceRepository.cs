@@ -1,5 +1,6 @@
 using Asn.Diplomski.Application.Interfaces;
 using Asn.Diplomski.Domain.Entities;
+using Asn.Diplomski.Domain.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Asn.Diplomski.Rdbm.Repositories
@@ -51,5 +52,16 @@ namespace Asn.Diplomski.Rdbm.Repositories
         public Task<Device?> GetByProvisioningTokenIgnoringExpiryAsync(string token)
             => _db.Devices
                 .FirstOrDefaultAsync(d => d.ProvisioningToken == token);
+
+        public Task<Device?> GetByIdAndTenantAsync(long deviceId, long tenantId)
+            => _db.Devices
+                .FirstOrDefaultAsync(d => d.Id == deviceId && d.TenantId == tenantId);
+
+        public async Task<IReadOnlyList<Device>> GetAllProvisionedByTenantAsync(long tenantId)
+            => await _db.Devices
+                .Where(d => d.TenantId == tenantId
+                    && d.ProvisionStatus == ProvisionStatus.Provisioned
+                    && d.IsActive)
+                .ToListAsync();
     }
 }

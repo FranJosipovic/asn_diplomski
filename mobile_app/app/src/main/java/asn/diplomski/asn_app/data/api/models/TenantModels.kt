@@ -19,7 +19,7 @@ data class TenantResponse(
 
 data class DeviceResponse(
     val id: Long,
-    val type: Int,
+    val type: String,
     val provisionStatus: String?,
     val deviceNumber: Int,
     val description: String?,
@@ -31,7 +31,7 @@ data class DeviceResponse(
 
 data class SensorResponse(
     val id: Long,
-    val type: Int,
+    val type: String,
     val sensorNumber: Int,
     val description: String,
     val isActive: Boolean,

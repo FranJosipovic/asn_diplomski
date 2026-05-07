@@ -35,11 +35,20 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             val token = tokenManager.tokenFlow.firstOrNull()
             val tenantId = tokenManager.getTenantIdFromToken(token)
-            _uiState.value = if (tenantId != null) {
-                AuthUiState.Success(tenantId)
-            } else {
-                AuthUiState.Idle
+            if (tenantId == null) {
+                _uiState.value = AuthUiState.Idle
+                return@launch
             }
+            // Refresh the access token so we don't land on devices with an expired token
+            val refreshResult = authRepository.refreshToken()
+            if (refreshResult.isFailure) {
+                authRepository.logout()
+                _uiState.value = AuthUiState.Idle
+                return@launch
+            }
+            val freshToken = tokenManager.tokenFlow.firstOrNull()
+            val freshTenantId = tokenManager.getTenantIdFromToken(freshToken) ?: tenantId
+            _uiState.value = AuthUiState.Success(freshTenantId)
         }
     }
 

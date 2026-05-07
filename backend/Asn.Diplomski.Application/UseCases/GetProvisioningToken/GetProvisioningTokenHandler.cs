@@ -24,11 +24,21 @@ namespace Asn.Diplomski.Application.UseCases.GetProvisioningToken
             var expiresAt = DateTime.UtcNow.AddMinutes(15);
             var deviceInfos = new List<DeviceProvisioningInfo>();
 
+            var devicesToUpdate = new List<Domain.Entities.Device>();
+
             foreach (var device in tenant.Devices.Where(d => d.IsActive))
             {
-                device.ProvisioningToken = GenerateProvisioningToken();
-                device.ProvisioningTokenExpiresAt = expiresAt;
-                device.ProvisionStatus = ProvisionStatus.Provisioning;
+                bool tokenExpired = device.ProvisioningTokenExpiresAt <= DateTime.UtcNow;
+                bool needsNewToken = device.ProvisionStatus == ProvisionStatus.NotProvisioned
+                    || (device.ProvisionStatus == ProvisionStatus.Provisioning && tokenExpired);
+
+                if (needsNewToken)
+                {
+                    device.ProvisioningToken = GenerateProvisioningToken();
+                    device.ProvisioningTokenExpiresAt = expiresAt;
+                    device.ProvisionStatus = ProvisionStatus.Provisioning;
+                    devicesToUpdate.Add(device);
+                }
 
                 deviceInfos.Add(new DeviceProvisioningInfo
                 {
@@ -36,7 +46,7 @@ namespace Asn.Diplomski.Application.UseCases.GetProvisioningToken
                     DeviceType = device.Type,
                     DeviceSsid = $"{device.Type}_{device.Id}",
                     ProvisionStatus = device.ProvisionStatus,
-                    ProvisioningToken = device.ProvisioningToken,
+                    ProvisioningToken = device.ProvisioningToken ?? string.Empty,
                     Sensors = device.Sensors
                         .Where(s => s.IsActive)
                         .Select(s => new SensorProvisioningInfo
@@ -48,7 +58,8 @@ namespace Asn.Diplomski.Application.UseCases.GetProvisioningToken
                 });
             }
 
-            await _deviceRepository.UpdateRangeAsync(tenant.Devices.Where(d => d.IsActive).ToList());
+            if (devicesToUpdate.Count > 0)
+                await _deviceRepository.UpdateRangeAsync(devicesToUpdate);
 
             return GetProvisioningTokenResult.Success(deviceInfos, expiresAt);
         }

@@ -2,7 +2,7 @@ package asn.diplomski.asn_app.domain.model
 
 data class Device(
     val id: Long,
-    val type: Int,
+    val type: String,
     val provisionStatus: String?,
     val deviceNumber: Int,
     val description: String?,
@@ -14,7 +14,7 @@ data class Device(
 
 data class Sensor(
     val id: Long,
-    val type: Int,
+    val type: String,
     val sensorNumber: Int,
     val description: String?,
     val isActive: Boolean,

@@ -9,17 +9,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -31,9 +36,13 @@ import asn.diplomski.asn_app.domain.model.Device
 internal fun DevicesRoute(
     tenantId: Long,
     onNavigateToProvisioning: (deviceId: Long) -> Unit,
+    onNavigateToAuth: () -> Unit,
     viewModel: DevicesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    LaunchedEffect(viewModel) {
+        viewModel.navigateToAuth.collectLatest { onNavigateToAuth() }
+    }
 
     LaunchedEffect(tenantId) {
         viewModel.onAction(DevicesAction.LoadDevices(tenantId))
@@ -104,7 +113,7 @@ private fun DeviceCard(device: Device, onProvision: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Type: ${if (device.type == 1) "SensorUnit" else "PumpUnit"}",
+                        text = "Type: ${device.type}",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
@@ -118,7 +127,14 @@ private fun DeviceCard(device: Device, onProvision: () -> Unit) {
                     )
                 }
 
-                if (device.provisionStatus != "Provisioned") {
+                if (device.provisionStatus == "Provisioned") {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Provisioned",
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                } else {
                     Button(onClick = onProvision) {
                         Text("Provision")
                     }

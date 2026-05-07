@@ -118,4 +118,21 @@ namespace Asn.Diplomski.Server.DTOs
         public int MqttPort { get; set; }
         public List<SensorProvisioningDto> Sensors { get; set; } = [];
     }
+
+    public class CompleteProvisioningRequestDto
+    {
+        public string Token { get; set; } = null!;
+    }
+
+    public class ConfirmMqttConnectionRequestDto
+    {
+        public long TenantId { get; set; }
+        public long DeviceId { get; set; }
+    }
+
+    public class StartSystemResponseDto
+    {
+        public int NotifiedDeviceCount { get; set; }
+        public List<long> NotifiedDeviceIds { get; set; } = [];
+    }
 }

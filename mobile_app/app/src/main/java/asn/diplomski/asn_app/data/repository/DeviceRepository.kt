@@ -55,6 +55,20 @@ class DeviceRepository @Inject constructor(
         }
     }
 
+    suspend fun getDeviceProvisionStatus(deviceId: Long, token: String?): Result<String> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+            ?: return Result.failure(Exception("No token available"))
+        return try {
+            val response = api.getProvisioningConfig(authHeader)
+            val device = response.devices.find { it.deviceId == deviceId }
+                ?: return Result.failure(Exception("Device $deviceId not found in provisioning response"))
+            Result.success(device.provisionStatus)
+        } catch (e: Exception) {
+            Log.e(TAG, "getDeviceProvisionStatus: failed", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun getDeviceProvisionInfo(deviceId: Long, token: String?): Result<DeviceProvisionInfo> {
         val authHeader = tokenManager.getAuthorizationHeader(token)
         if (authHeader == null) {

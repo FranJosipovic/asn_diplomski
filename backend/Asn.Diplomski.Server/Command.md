@@ -103,7 +103,7 @@ docker exec -it asn-mosquitto mosquitto_sub -h localhost -p 1883 \
 ### Temperatura
 ```bash
 docker exec -it asn-mosquitto mosquitto_pub -h localhost -p 1883 \
-  -t "1/{deviceId}/sensor/temperature" \
+  -t "tenant_6/device_11/command" \
   -m '{"value": 23.5, "unit": "°C", "timestamp": "2026-05-02T10:00:00Z"}'
 ```
 

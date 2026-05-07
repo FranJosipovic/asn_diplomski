@@ -19,6 +19,8 @@ import com.espressif.provisioning.listeners.WiFiScanListener
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
@@ -44,6 +46,7 @@ sealed interface ProvisioningUiState {
     data object ScanningNetworks : ProvisioningUiState
     data class NetworksFound(val networks: List<WiFiAccessPoint>) : ProvisioningUiState
     data object Provisioning : ProvisioningUiState
+    data object WaitingForMqtt : ProvisioningUiState
     data object Success : ProvisioningUiState
     data class Error(val message: String) : ProvisioningUiState
 }
@@ -68,6 +71,7 @@ class ProvisioningViewModel @Inject constructor(
     private var espDevice: ESPDevice? = null
     private var provisionInfo: DeviceProvisionInfo? = null
     private var deviceId: Long = -1L
+    private var pollingJob: Job? = null
 
     init {
         EventBus.getDefault().register(this)
@@ -76,6 +80,7 @@ class ProvisioningViewModel @Inject constructor(
     override fun onCleared() {
         EventBus.getDefault().unregister(this)
         espDevice?.disconnectDevice()
+        pollingJob?.cancel()
         super.onCleared()
     }
 
@@ -88,6 +93,8 @@ class ProvisioningViewModel @Inject constructor(
             is ProvisioningAction.StartProvisioning -> fetchConfigAndConnect()
             is ProvisioningAction.ProvisionWithNetwork -> provision(action.wifiSsid, action.wifiPassword)
             ProvisioningAction.Retry -> {
+                pollingJob?.cancel()
+                pollingJob = null
                 espDevice?.disconnectDevice()
                 espDevice = null
                 provisionInfo = null
@@ -250,8 +257,9 @@ class ProvisioningViewModel @Inject constructor(
             }
 
             override fun deviceProvisioningSuccess() {
-                Log.d(TAG, "deviceProvisioningSuccess")
-                _uiState.value = ProvisioningUiState.Success
+                Log.d(TAG, "deviceProvisioningSuccess — starting MQTT poll")
+                _uiState.value = ProvisioningUiState.WaitingForMqtt
+                startMqttPolling()
             }
 
             override fun onProvisioningFailed(e: Exception) {
@@ -260,6 +268,32 @@ class ProvisioningViewModel @Inject constructor(
             }
         }) ?: run {
             _uiState.value = ProvisioningUiState.Error("Device not connected.")
+        }
+    }
+
+    private fun startMqttPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            val token = tokenManager.tokenFlow.firstOrNull()
+            val deadline = System.currentTimeMillis() + 2 * 60 * 1000L
+            delay(5_000)
+            while (System.currentTimeMillis() < deadline) {
+                val result = deviceRepository.getDeviceProvisionStatus(deviceId, token)
+                result.onSuccess { status ->
+                    Log.d(TAG, "poll: deviceId=$deviceId status=$status")
+                    if (status == "Provisioned") {
+                        _uiState.value = ProvisioningUiState.Success
+                        return@launch
+                    }
+                }
+                delay(5_000)
+            }
+            if (_uiState.value is ProvisioningUiState.WaitingForMqtt) {
+                Log.w(TAG, "poll: timed out waiting for MQTT confirmation")
+                _uiState.value = ProvisioningUiState.Error(
+                    "Device did not confirm MQTT connection within 2 minutes.\nCheck that the MQTT broker is reachable."
+                )
+            }
         }
     }
 }

@@ -47,6 +47,11 @@ fun Navigation() {
                 tenantId = tenantId,
                 onNavigateToProvisioning = { deviceId ->
                     navController.navigate(Route.Provision.createRoute(deviceId))
+                },
+                onNavigateToAuth = {
+                    navController.navigate(Route.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             )
         }

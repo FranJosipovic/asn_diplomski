@@ -96,6 +96,7 @@ internal fun ProvisioningScreen(
                 is ProvisioningUiState.ScanningNetworks -> LoadingStep("Scanning for WiFi networks…")
                 is ProvisioningUiState.NetworksFound -> SelectNetworkStep(uiState.networks, onAction)
                 is ProvisioningUiState.Provisioning -> LoadingStep("Provisioning device…")
+                is ProvisioningUiState.WaitingForMqtt -> LoadingStep("Waiting for device to connect to MQTT…")
                 is ProvisioningUiState.Success -> SuccessStep(onNavigateBack)
                 is ProvisioningUiState.Error -> ErrorStep(uiState.message, onAction)
             }
@@ -225,7 +226,7 @@ private fun SuccessStep(onNavigateBack: () -> Unit) {
         Text(text = "Device Provisioned!", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "The device has been successfully connected to WiFi.",
+            text = "The device connected to WiFi and confirmed its MQTT connection.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
