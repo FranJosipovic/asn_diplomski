@@ -20,9 +20,8 @@ interface AsnApi {
     @POST("/api/auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): RefreshTokenResponse
 
-    @GET("/api/tenants/{id}")
+    @GET("/api/tenants/me")
     suspend fun getTenant(
-        @Path("id") tenantId: Long,
         @Header("Authorization") token: String
     ): TenantResponse
 
