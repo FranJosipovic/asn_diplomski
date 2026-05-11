@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import asn.diplomski.asn_app.data.TokenManager
 import asn.diplomski.asn_app.data.repository.DeviceRepository
 import asn.diplomski.asn_app.domain.model.DeviceProvisionInfo
+import asn.diplomski.asn_app.domain.model.ProvisionDevice
 import com.espressif.provisioning.DeviceConnectionEvent
 import com.espressif.provisioning.ESPConstants
 import com.espressif.provisioning.ESPDevice
@@ -39,6 +40,8 @@ import javax.inject.Inject
 private const val TAG = "ProvisioningViewModel"
 
 sealed interface ProvisioningUiState {
+    data object LoadingDevices : ProvisioningUiState
+    data class DeviceList(val devices: List<ProvisionDevice>) : ProvisioningUiState
     data object Idle : ProvisioningUiState
     data object FetchingConfig : ProvisioningUiState
     data object ConnectingToDevice : ProvisioningUiState
@@ -52,6 +55,9 @@ sealed interface ProvisioningUiState {
 }
 
 sealed interface ProvisioningAction {
+    data object LoadDevices : ProvisioningAction
+    data class SelectDevice(val deviceId: Long) : ProvisioningAction
+    data object BackToList : ProvisioningAction
     data object StartProvisioning : ProvisioningAction
     data class ProvisionWithNetwork(val wifiSsid: String, val wifiPassword: String) : ProvisioningAction
     data object Retry : ProvisioningAction
@@ -65,12 +71,12 @@ class ProvisioningViewModel @Inject constructor(
     private val okHttpClient: OkHttpClient
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<ProvisioningUiState>(ProvisioningUiState.Idle)
+    private val _uiState = MutableStateFlow<ProvisioningUiState>(ProvisioningUiState.LoadingDevices)
     val uiState = _uiState.asStateFlow()
 
     private var espDevice: ESPDevice? = null
     private var provisionInfo: DeviceProvisionInfo? = null
-    private var deviceId: Long = -1L
+    private var selectedDeviceId: Long = -1L
     private var pollingJob: Job? = null
 
     init {
@@ -84,31 +90,58 @@ class ProvisioningViewModel @Inject constructor(
         super.onCleared()
     }
 
-    fun setDeviceId(id: Long) {
-        deviceId = id
-    }
-
     fun onAction(action: ProvisioningAction) {
         when (action) {
-            is ProvisioningAction.StartProvisioning -> fetchConfigAndConnect()
+            ProvisioningAction.LoadDevices -> loadDevices()
+            is ProvisioningAction.SelectDevice -> {
+                selectedDeviceId = action.deviceId
+                _uiState.value = ProvisioningUiState.Idle
+            }
+            ProvisioningAction.BackToList -> {
+                resetProvisioningState()
+                loadDevices()
+            }
+            ProvisioningAction.StartProvisioning -> fetchConfigAndConnect()
             is ProvisioningAction.ProvisionWithNetwork -> provision(action.wifiSsid, action.wifiPassword)
             ProvisioningAction.Retry -> {
-                pollingJob?.cancel()
-                pollingJob = null
-                espDevice?.disconnectDevice()
-                espDevice = null
-                provisionInfo = null
+                resetProvisioningState()
                 _uiState.value = ProvisioningUiState.Idle
             }
         }
     }
 
+    private fun resetProvisioningState() {
+        pollingJob?.cancel()
+        pollingJob = null
+        espDevice?.disconnectDevice()
+        espDevice = null
+        provisionInfo = null
+    }
+
+    private fun loadDevices() {
+        viewModelScope.launch {
+            _uiState.value = ProvisioningUiState.LoadingDevices
+            val token = tokenManager.tokenFlow.firstOrNull()
+            val result = deviceRepository.getAllProvisionDevices(token)
+            result.fold(
+                onSuccess = { devices ->
+                    Log.d(TAG, "loadDevices: ${devices.size} devices")
+                    _uiState.value = ProvisioningUiState.DeviceList(devices)
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "loadDevices: failed", e)
+                    _uiState.value = ProvisioningUiState.Error("Failed to load devices: ${e.message}")
+                }
+            )
+        }
+    }
+
     private fun fetchConfigAndConnect() {
         viewModelScope.launch {
-            Log.d(TAG, "fetchConfigAndConnect: deviceId=$deviceId")
+            Log.d(TAG, "fetchConfigAndConnect: deviceId=$selectedDeviceId")
             _uiState.value = ProvisioningUiState.FetchingConfig
             val token = tokenManager.tokenFlow.firstOrNull()
-            val result = deviceRepository.getDeviceProvisionInfo(deviceId, token)
+            val result = deviceRepository.getDeviceProvisionInfo(selectedDeviceId, token)
             result.fold(
                 onSuccess = { info ->
                     Log.d(TAG, "fetchConfigAndConnect: got config, ssid=${info.deviceSsid}")
@@ -170,8 +203,6 @@ class ProvisioningViewModel @Inject constructor(
         viewModelScope.launch {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-            // Find the active WiFi network and bind to it so Android doesn't
-            // reroute the request through cellular when the ESP32 AP has no internet
             val wifiNetwork = connectivityManager.allNetworks.firstOrNull { network ->
                 connectivityManager.getNetworkCapabilities(network)
                     ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
@@ -179,9 +210,7 @@ class ProvisioningViewModel @Inject constructor(
 
             val client = if (wifiNetwork != null) {
                 Log.d(TAG, "sendProvisionData: binding socket to WiFi network")
-                okHttpClient.newBuilder()
-                    .socketFactory(wifiNetwork.socketFactory)
-                    .build()
+                okHttpClient.newBuilder().socketFactory(wifiNetwork.socketFactory).build()
             } else {
                 Log.w(TAG, "sendProvisionData: WiFi network not found, using default client")
                 okHttpClient
@@ -278,10 +307,10 @@ class ProvisioningViewModel @Inject constructor(
             val deadline = System.currentTimeMillis() + 2 * 60 * 1000L
             delay(5_000)
             while (System.currentTimeMillis() < deadline) {
-                val result = deviceRepository.getDeviceProvisionStatus(deviceId, token)
+                val result = deviceRepository.getDeviceProvisionStatus(selectedDeviceId, token)
                 result.onSuccess { status ->
-                    Log.d(TAG, "poll: deviceId=$deviceId status=$status")
-                    if (status == "Provisioned") {
+                    Log.d(TAG, "poll: deviceId=$selectedDeviceId status=$status")
+                    if (status == "Ready") {
                         _uiState.value = ProvisioningUiState.Success
                         return@launch
                     }

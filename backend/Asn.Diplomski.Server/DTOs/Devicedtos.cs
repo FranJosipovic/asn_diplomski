@@ -1,4 +1,5 @@
 using Asn.Diplomski.Domain.Entities.Enums;
+using System.Text.Json.Serialization;
 
 namespace Asn.Diplomski.Server.DTOs
 {
@@ -6,7 +7,8 @@ namespace Asn.Diplomski.Server.DTOs
     {
         public long Id { get; set; }
         public DeviceType Type { get; set; }
-        public ProvisionStatus ProvisionStatus { get; set; }
+        [JsonPropertyName("provisionStatus")]
+        public DeviceStatus Status { get; set; }
         public int DeviceNumber { get; set; }
         public string? Description { get; set; }
         public bool IsActive { get; set; }

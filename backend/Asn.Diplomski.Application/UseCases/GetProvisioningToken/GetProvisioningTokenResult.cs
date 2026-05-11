@@ -20,7 +20,7 @@ namespace Asn.Diplomski.Application.UseCases.GetProvisioningToken
         public long DeviceId { get; set; }
         public DeviceType DeviceType { get; set; }
         public string DeviceSsid { get; set; } = null!;
-        public ProvisionStatus ProvisionStatus { get; set; }
+        public DeviceStatus Status { get; set; }
         public string ProvisioningToken { get; set; } = null!;
         public List<SensorProvisioningInfo> Sensors { get; set; } = [];
     }

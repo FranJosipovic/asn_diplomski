@@ -21,7 +21,7 @@ namespace Asn.Diplomski.Domain.Entities
         public bool IsActive { get; set; } = true;
 
         // Provisioning
-        public ProvisionStatus ProvisionStatus { get; set; } = ProvisionStatus.NotProvisioned;
+        public DeviceStatus Status { get; set; } = DeviceStatus.NotProvisioned;
         public string? ProvisioningToken { get; set; }
         public DateTime? ProvisioningTokenExpiresAt { get; set; }
 

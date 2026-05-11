@@ -4,16 +4,161 @@ info:
   version: "1.0"
   description: >
     REST API for the IoT irrigation SaaS backend.
-    Base URL (dev): http://localhost:5064
+    Base URL (dev): http://localhost:5017
 
 servers:
-  - url: http://localhost:5064
+  - url: http://localhost:5017
     description: Local development
 
 # ─────────────────────────────────────────────────────────────
-# TENANTS
+# ENDPOINTS
 # ─────────────────────────────────────────────────────────────
 paths:
+
+  /api/auth/signin:
+    post:
+      summary: Sign in with email and password
+      description: >
+        Authenticates a tenant with email and password. Returns JWT access token
+        (60 min) and refresh token (7 days). Used for initial login.
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+            example:
+              email: "ivic@example.com"
+              password: "SuperTajnaLozinka1!"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignInResponse'
+        "401":
+          description: Invalid email or password
+        "400":
+          description: Validation error
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh access token
+      description: >
+        Generates a new access token using a valid refresh token.
+        The refresh token is rotated (a new one is returned).
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+            example:
+              refreshToken: "base64-encoded-refresh-token-here"
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        "401":
+          description: Invalid refresh token
+        "403":
+          description: Refresh token expired
+
+  /api/provision:
+    get:
+      summary: Get provisioning tokens for all tenant devices
+      description: >
+        Generates a 15-minute provisioning token for each active device under the
+        authenticated tenant. Sets each device status to PROVISIONING. The token
+        is presented by the microcontroller to POST /api/provision/{token} to complete
+        provisioning. Tenant ID is extracted from the JWT.
+      tags: [Provisioning]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Provisioning tokens generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisioningTokenResponse'
+              example:
+                expiresAt: "2026-05-06T13:15:00Z"
+                serverHost: "localhost"
+                serverPort: 5094
+                devices:
+                  - deviceId: 1
+                    deviceType: "SensorUnit"
+                    deviceSsid: "SensorUnit_1"
+                    provisionStatus: "Provisioning"
+                    provisioningToken: "base64-encoded-token-device-1"
+                    sensors:
+                      - sensorId: 1
+                        sensorType: "Temperature"
+                      - sensorId: 2
+                        sensorType: "SoilMoisture"
+                  - deviceId: 2
+                    deviceType: "PumpUnit"
+                    deviceSsid: "PumpUnit_2"
+                    provisionStatus: "Provisioning"
+                    provisioningToken: "base64-encoded-token-device-2"
+                    sensors:
+                      - sensorId: 3
+                        sensorType: "WaterLevel"
+                      - sensorId: 4
+                        sensorType: "PumpCommand"
+        "401":
+          description: Unauthorized — missing or invalid JWT token
+        "404":
+          description: Tenant not found
+
+  /api/provision/{provisioningToken}:
+    post:
+      summary: Complete device provisioning
+      description: >
+        Called by the microcontroller after connecting to the device's Wi-Fi AP and
+        receiving its provisioning token. No JWT required — the token is the
+        credential. Sets device status to PROVISIONED, clears the token, and returns
+        MQTT broker details plus tenant/device/sensor identity so the device can
+        start publishing data.
+      tags: [Provisioning]
+      security: []
+      parameters:
+        - name: provisioningToken
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Base64-encoded provisioning token received from GET /api/provision
+      responses:
+        "200":
+          description: Provisioning complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteProvisioningResponse'
+              example:
+                tenantId: 1
+                deviceId: 1
+                mqttHost: "localhost"
+                mqttPort: 1883
+                sensors:
+                  - sensorId: 1
+                    sensorType: "Temperature"
+                  - sensorId: 2
+                    sensorType: "SoilMoisture"
+        "404":
+          description: Provisioning token not found
+        "410":
+          description: Provisioning token has expired
 
   /api/tenants:
     post:
@@ -45,13 +190,13 @@ paths:
         "400":
           description: Validation error
 
-  /api/tenants/{id}:
+  /api/tenants/me:
     get:
-      summary: Get tenant by ID
-      description: Returns tenant with all devices and their sensors.
+      summary: Get current tenant
+      description: Returns the authenticated tenant with all devices and sensors. Tenant ID is extracted from the JWT.
       tags: [Tenants]
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
+      security:
+        - BearerAuth: []
       responses:
         "200":
           description: Tenant found
@@ -59,6 +204,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantResponse'
+        "401":
+          description: Unauthorized — missing or invalid JWT token
         "404":
           description: Tenant not found
 
@@ -68,7 +215,10 @@ paths:
       description: >
         Called by the microcontroller on startup. The server subscribes to all
         MQTT topics for the tenant's devices and starts receiving sensor data.
+        Requires JWT authentication.
       tags: [Tenants]
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/TenantId'
       responses:
@@ -82,6 +232,8 @@ paths:
                   - "tenant_1/device_1/sensor/temperature"
                   - "tenant_1/device_1/sensor/soil"
                   - "tenant_1/device_2/sensor/water-level"
+        "401":
+          description: Unauthorized — missing or invalid JWT token
         "404":
           description: Tenant not found
 
@@ -92,8 +244,10 @@ paths:
   /api/sensors/{sensorId}/temperature/latest:
     get:
       summary: Latest temperature reading
-      description: Returns the single most recent temperature reading for the sensor.
+      description: Returns the single most recent temperature reading for the sensor. Requires JWT authentication.
       tags: [Sensor Readings]
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/SensorId'
       responses:
@@ -107,6 +261,8 @@ paths:
                 id: 42
                 value: 23.7
                 recordedAt: "2026-05-05T14:30:00Z"
+        "401":
+          description: Unauthorized — missing or invalid JWT token
         "404":
           description: No readings available for this sensor
 
@@ -116,8 +272,10 @@ paths:
       description: >
         Returns a list of temperature readings for the sensor within the
         requested time window. Use the `window` query parameter to control
-        how far back to look (default 24h).
+        how far back to look (default 24h). Requires JWT authentication.
       tags: [Sensor Readings]
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/SensorId'
         - $ref: '#/components/parameters/Window'
@@ -141,12 +299,16 @@ paths:
                   - id: 42
                     value: 23.7
                     recordedAt: "2026-05-05T14:00:00Z"
+        "401":
+          description: Unauthorized — missing or invalid JWT token
 
   /api/sensors/{sensorId}/soil-moisture/latest:
     get:
       summary: Latest soil moisture reading
-      description: Returns the single most recent soil moisture reading for the sensor.
+      description: Returns the single most recent soil moisture reading for the sensor. Requires JWT authentication.
       tags: [Sensor Readings]
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/SensorId'
       responses:
@@ -160,6 +322,8 @@ paths:
                 id: 17
                 value: 42.5
                 recordedAt: "2026-05-05T14:30:00Z"
+        "401":
+          description: Unauthorized — missing or invalid JWT token
         "404":
           description: No readings available for this sensor
 
@@ -169,7 +333,10 @@ paths:
       description: >
         Returns a list of soil moisture readings (0–100 %) for the sensor
         within the requested time window. Use `window` to control lookback range.
+        Requires JWT authentication.
       tags: [Sensor Readings]
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/SensorId'
         - $ref: '#/components/parameters/Window'
@@ -193,42 +360,152 @@ paths:
                   - id: 17
                     value: 42.5
                     recordedAt: "2026-05-05T14:00:00Z"
+        "401":
+          description: Unauthorized — missing or invalid JWT token
 
 # ─────────────────────────────────────────────────────────────
 # COMPONENTS
 # ─────────────────────────────────────────────────────────────
 components:
 
-  parameters:
-    TenantId:
-      name: id
-      in: path
-      required: true
-      schema:
-        type: integer
-        format: int64
-      description: Tenant ID
-
-    SensorId:
-      name: sensorId
-      in: path
-      required: true
-      schema:
-        type: integer
-        format: int64
-      description: Sensor ID
-
-    Window:
-      name: window
-      in: query
-      required: false
-      schema:
-        type: string
-        enum: [1h, 6h, 24h, 7d, 30d]
-        default: 24h
-      description: "Time window for historical data. Accepted values: 1h, 6h, 24h, 7d, 30d"
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT access token. Obtain via /api/auth/signin"
 
   schemas:
+
+    SignInRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Tenant email address
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          description: Tenant password
+
+    SignInResponse:
+      type: object
+      properties:
+        tenantId:
+          type: integer
+          format: int64
+          description: Authenticated tenant ID
+        email:
+          type: string
+          description: Tenant email
+        accessToken:
+          type: string
+          description: JWT access token (valid for 60 minutes)
+        refreshToken:
+          type: string
+          description: Refresh token (valid for 7 days)
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+          description: Expiration time of the refresh token
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          description: Base64-encoded refresh token from previous sign-in or refresh
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: New JWT access token (valid for 60 minutes)
+        refreshToken:
+          type: string
+          description: New rotated refresh token (valid for 7 days)
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+          description: Expiration time of the new refresh token
+
+    ProvisioningTokenResponse:
+      type: object
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiration time shared by all provisioning tokens (15 minutes from issue)
+        serverHost:
+          type: string
+          description: Server hostname (extracted from the incoming request)
+        serverPort:
+          type: integer
+          description: Server port (extracted from the incoming request)
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceProvisioningInfo'
+
+    DeviceProvisioningInfo:
+      type: object
+      properties:
+        deviceId:
+          type: integer
+          format: int64
+        deviceType:
+          type: string
+          enum: [SensorUnit, PumpUnit]
+        deviceSsid:
+          type: string
+          description: "Wi-Fi AP name the mobile app connects to: {deviceType}_{deviceId}"
+          example: "SensorUnit_1"
+        provisionStatus:
+          type: string
+          enum: [NotProvisioned, Provisioning, Provisioned]
+        provisioningToken:
+          type: string
+          description: Base64-encoded token for this device (valid for 15 minutes)
+        sensors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SensorProvisioningInfo'
+
+    SensorProvisioningInfo:
+      type: object
+      properties:
+        sensorId:
+          type: integer
+          format: int64
+        sensorType:
+          type: string
+          enum: [Temperature, SoilMoisture, WaterLevel, PumpCommand]
+
+    CompleteProvisioningResponse:
+      type: object
+      properties:
+        tenantId:
+          type: integer
+          format: int64
+        deviceId:
+          type: integer
+          format: int64
+        mqttHost:
+          type: string
+          description: MQTT broker hostname the device should publish to
+        mqttPort:
+          type: integer
+          description: MQTT broker port
+        sensors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SensorProvisioningInfo'
 
     CreateTenantRequest:
       type: object
@@ -321,6 +598,9 @@ components:
           type: integer
           description: "1 = SensorUnit, 2 = PumpUnit"
           enum: [1, 2]
+        provisionStatus:
+          type: string
+          enum: [NotProvisioned, Provisioning, Provisioned]
         deviceNumber:
           type: integer
         description:
@@ -389,3 +669,32 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReadingResponse'
+
+  parameters:
+    TenantId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Tenant ID
+
+    SensorId:
+      name: sensorId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Sensor ID
+
+    Window:
+      name: window
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [1h, 6h, 24h, 7d, 30d]
+        default: 24h
+      description: "Time window for historical data. Accepted values: 1h, 6h, 24h, 7d, 30d"

@@ -135,4 +135,28 @@ namespace Asn.Diplomski.Server.DTOs
         public int NotifiedDeviceCount { get; set; }
         public List<long> NotifiedDeviceIds { get; set; } = [];
     }
+
+    public class StopSystemResponseDto
+    {
+        public int NotifiedDeviceCount { get; set; }
+        public List<long> NotifiedDeviceIds { get; set; } = [];
+    }
+
+    public class ReprovisionRequestDto
+    {
+        public long TenantId { get; set; }
+        public long DeviceId { get; set; }
+    }
+
+    public class SetDeviceProvisioningReadyRequestDto
+    {
+        public long DeviceId { get; set; }
+    }
+
+    public class SetDeviceProvisioningReadyResponseDto
+    {
+        public long DeviceId { get; set; }
+        public string ProvisioningToken { get; set; } = string.Empty;
+        public DateTime ExpiresAt { get; set; }
+    }
 }

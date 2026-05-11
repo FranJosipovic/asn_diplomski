@@ -1,12 +1,12 @@
+import { Link } from 'react-router-dom'
 import { DeviceType, deviceTypeLabel, sensorTypeClass, sensorTypeLabel, timeAgo, isRecentlySeen, formatDateTime, SensorType } from '../types'
-import type { DeviceResponse, SensorResponse } from '../types'
+import type { DeviceResponse } from '../types'
 
 interface Props {
   device: DeviceResponse
-  onSensorClick?: (sensor: SensorResponse) => void
 }
 
-export default function DeviceCard({ device, onSensorClick }: Props) {
+export default function DeviceCard({ device }: Props) {
   const isSensor = device.type === DeviceType.SensorUnit
   const recently = isRecentlySeen(device.lastSeenAt)
 
@@ -53,20 +53,32 @@ export default function DeviceCard({ device, onSensorClick }: Props) {
         ) : (
           <div>
             {device.sensors.map(s => {
+              console.log(s)
               const isReadable = s.type === SensorType.Temperature || s.type === SensorType.SoilMoisture
-              return (
-                <button
-                  key={s.id}
-                  className={`sensor-row ${isReadable ? 'readable' : ''}`}
-                  onClick={() => isReadable && onSensorClick?.(s)}
-                  style={{ cursor: isReadable ? 'pointer' : 'default' }}
-                >
+              const inner = (
+                <>
                   <div className="sensor-left">
                     <div className={`sensor-pip ${sensorTypeClass(s.type)}`} />
                     <span className="sensor-name">{sensorTypeLabel(s.type)}</span>
                   </div>
-                  <span className="sensor-id" style={{marginLeft:"5px"}}>ID {s.id} · #{s.sensorNumber}</span>
-                </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="sensor-id">ID {s.id} · #{s.sensorNumber}</span>
+                    {isReadable && <span style={{ color: 'var(--text-2)', fontSize: 11 }}>→</span>}
+                  </div>
+                </>
+              )
+              return isReadable ? (
+                <Link
+                  key={s.id}
+                  to={`/dashboard/sensor/${s.id}?type=${s.type}`}
+                  className="sensor-row readable"
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div key={s.id} className="sensor-row">
+                  {inner}
+                </div>
               )
             })}
           </div>

@@ -5,5 +5,6 @@ namespace Asn.Diplomski.Application.Interfaces
     public interface IMqttSubscriber
     {
         Task SubscribeToDeviceAsync(Device device);
+        Task UnsubscribeFromDeviceAsync(long tenantId, long deviceId);
     }
 }

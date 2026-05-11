@@ -5,6 +5,9 @@ using Asn.Diplomski.Application.UseCases.CreateDeviceWithSensors;
 using Asn.Diplomski.Application.UseCases.CreateTenant;
 using Asn.Diplomski.Application.UseCases.CompleteDeviceProvisioning;
 using Asn.Diplomski.Application.UseCases.ConfirmMqttConnection;
+using Asn.Diplomski.Application.UseCases.HandleDeviceStatus;
+using Asn.Diplomski.Application.UseCases.RequestReprovision;
+using Asn.Diplomski.Application.UseCases.SetDeviceProvisioningReady;
 using Asn.Diplomski.Application.UseCases.GetProvisioningToken;
 using Asn.Diplomski.Application.UseCases.GetSoilMoistureReadings;
 using Asn.Diplomski.Application.UseCases.GetTemperatureReadings;
@@ -68,6 +71,9 @@ builder.Services.AddScoped<RefreshTokenHandler>();
 builder.Services.AddScoped<GetProvisioningTokenHandler>();
 builder.Services.AddScoped<CompleteDeviceProvisioningHandler>();
 builder.Services.AddScoped<ConfirmMqttConnectionHandler>();
+builder.Services.AddScoped<HandleDeviceStatusHandler>();
+builder.Services.AddScoped<RequestReprovisionHandler>();
+builder.Services.AddScoped<SetDeviceProvisioningReadyHandler>();
 
 // ── Authentication / Authorization ──────────────────────────
 builder.Services.AddScoped<ITokenService, TokenService>();

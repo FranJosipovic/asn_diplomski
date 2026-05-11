@@ -1,4 +1,5 @@
 using Asn.Diplomski.Application.Mqtt;
+using Asn.Diplomski.Application.UseCases.HandleDeviceStatus;
 using Asn.Diplomski.Application.UseCases.HandleSoilMoisture;
 using Asn.Diplomski.Application.UseCases.HandleTemperature;
 using Asn.Diplomski.Application.UseCases.HandleWaterLevel;
@@ -65,6 +66,14 @@ namespace Asn.Diplomski.Server.Mqtt
                             break;
                         using var scope = _scopeFactory.CreateScope();
                         await scope.ServiceProvider.GetRequiredService<HandleTemperatureHandler>().HandleAsync(cmd);
+                        break;
+                    }
+                case MqttTopics.SlugStatus:
+                    {
+                        if (!MqttMessageMapper.TryMapToDeviceStatus(msg.Topic, msg.Payload, out var cmd))
+                            break;
+                        using var scope = _scopeFactory.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<HandleDeviceStatusHandler>().HandleAsync(cmd);
                         break;
                     }
                 default:

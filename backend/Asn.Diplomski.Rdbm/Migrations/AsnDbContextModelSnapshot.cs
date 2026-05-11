@@ -55,14 +55,14 @@ namespace Asn.Diplomski.Rdbm.Migrations
                     b.Property<DateTime?>("LastSeenAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ProvisionStatus")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ProvisioningToken")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("ProvisioningTokenExpiresAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<long>("TenantId")
                         .HasColumnType("bigint");

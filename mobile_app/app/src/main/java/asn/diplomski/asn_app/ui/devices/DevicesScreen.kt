@@ -1,5 +1,6 @@
 package asn.diplomski.asn_app.ui.devices
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,13 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,32 +32,38 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import asn.diplomski.asn_app.domain.model.Device
 
+private val COMMANDABLE_STATUSES = setOf("Ready", "Working", "Stopped")
+
 @Composable
 internal fun DevicesRoute(
-    tenantId: Long,
-    onNavigateToProvisioning: (deviceId: Long) -> Unit,
     onNavigateToAuth: () -> Unit,
     viewModel: DevicesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val systemCommandInProgress by viewModel.systemCommandInProgress.collectAsState()
+
     LaunchedEffect(viewModel) {
         viewModel.navigateToAuth.collectLatest { onNavigateToAuth() }
     }
 
-    LaunchedEffect(tenantId) {
-        viewModel.onAction(DevicesAction.LoadDevices(tenantId))
+    LaunchedEffect(Unit) {
+        viewModel.onAction(DevicesAction.Load)
     }
 
     DevicesScreen(
         uiState = uiState,
-        onProvision = onNavigateToProvisioning
+        systemCommandInProgress = systemCommandInProgress,
+        onStartSystem = { viewModel.onAction(DevicesAction.StartSystem) },
+        onStopSystem = { viewModel.onAction(DevicesAction.StopSystem) }
     )
 }
 
 @Composable
 internal fun DevicesScreen(
     uiState: DevicesUiState,
-    onProvision: (deviceId: Long) -> Unit
+    systemCommandInProgress: Boolean = false,
+    onStartSystem: () -> Unit = {},
+    onStopSystem: () -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (uiState) {
@@ -71,13 +77,51 @@ internal fun DevicesScreen(
                         .padding(16.dp)
                 ) {
                     Text(text = "Devices", style = MaterialTheme.typography.headlineLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val hasCommandable = uiState.devices.any {
+                        it.provisionStatus in COMMANDABLE_STATUSES
+                    }
+
+                    if (hasCommandable) {
+                        if (systemCommandInProgress) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                Text(
+                                    text = "Sending command…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = onStartSystem,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Start System")
+                                }
+                                OutlinedButton(
+                                    onClick = onStopSystem,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Stop System")
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(uiState.devices) { device ->
-                            DeviceCard(
-                                device = device,
-                                onProvision = { onProvision(device.id) }
-                            )
+                            DeviceCard(device = device)
                         }
                     }
                 }
@@ -98,7 +142,7 @@ internal fun DevicesScreen(
 }
 
 @Composable
-private fun DeviceCard(device: Device, onProvision: () -> Unit) {
+private fun DeviceCard(device: Device) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -113,32 +157,12 @@ private fun DeviceCard(device: Device, onProvision: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Type: ${device.type}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        text = "Status: ${device.provisionStatus ?: "Unknown"}",
+                        text = device.type,
                         style = MaterialTheme.typography.bodySmall,
-                        color = when (device.provisionStatus) {
-                            "Provisioned"    -> MaterialTheme.colorScheme.primary
-                            "Provisioning"   -> MaterialTheme.colorScheme.tertiary
-                            else             -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                if (device.provisionStatus == "Provisioned") {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Provisioned",
-                        modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Button(onClick = onProvision) {
-                        Text("Provision")
-                    }
-                }
+                StatusBadge(status = device.provisionStatus ?: "Unknown")
             }
 
             if (device.sensors.isNotEmpty()) {
@@ -150,7 +174,7 @@ private fun DeviceCard(device: Device, onProvision: () -> Unit) {
                 )
                 device.sensors.forEach { sensor ->
                     Text(
-                        text = "• ${sensor.description ?: "Sensor ${sensor.sensorNumber}"} (Type: ${sensor.type})",
+                        text = "• ${sensor.description ?: "Sensor ${sensor.sensorNumber}"} (${sensor.type})",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 8.dp, top = 4.dp)
                     )
@@ -158,4 +182,24 @@ private fun DeviceCard(device: Device, onProvision: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun StatusBadge(status: String) {
+    val color = when (status) {
+        "Working"            -> MaterialTheme.colorScheme.primary
+        "Ready"              -> MaterialTheme.colorScheme.tertiary
+        "Stopped"            -> MaterialTheme.colorScheme.error
+        "Provisioning",
+        "ProvisioningReady"  -> MaterialTheme.colorScheme.secondary
+        else                 -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(
+        text = status,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
 }

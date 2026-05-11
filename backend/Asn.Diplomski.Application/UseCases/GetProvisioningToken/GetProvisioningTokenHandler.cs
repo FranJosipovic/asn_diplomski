@@ -29,14 +29,14 @@ namespace Asn.Diplomski.Application.UseCases.GetProvisioningToken
             foreach (var device in tenant.Devices.Where(d => d.IsActive))
             {
                 bool tokenExpired = device.ProvisioningTokenExpiresAt <= DateTime.UtcNow;
-                bool needsNewToken = device.ProvisionStatus == ProvisionStatus.NotProvisioned
-                    || (device.ProvisionStatus == ProvisionStatus.Provisioning && tokenExpired);
+                bool needsNewToken = device.Status == DeviceStatus.NotProvisioned
+                    || (device.Status == DeviceStatus.ProvisioningReady && tokenExpired);
 
                 if (needsNewToken)
                 {
                     device.ProvisioningToken = GenerateProvisioningToken();
                     device.ProvisioningTokenExpiresAt = expiresAt;
-                    device.ProvisionStatus = ProvisionStatus.Provisioning;
+                    device.Status = DeviceStatus.ProvisioningReady;
                     devicesToUpdate.Add(device);
                 }
 
@@ -45,7 +45,7 @@ namespace Asn.Diplomski.Application.UseCases.GetProvisioningToken
                     DeviceId = device.Id,
                     DeviceType = device.Type,
                     DeviceSsid = $"{device.Type}_{device.Id}",
-                    ProvisionStatus = device.ProvisionStatus,
+                    Status = device.Status,
                     ProvisioningToken = device.ProvisioningToken ?? string.Empty,
                     Sensors = device.Sensors
                         .Where(s => s.IsActive)

@@ -1,4 +1,5 @@
 using Asn.Diplomski.Application.Mqtt;
+using Asn.Diplomski.Application.UseCases.HandleDeviceStatus;
 using Asn.Diplomski.Application.UseCases.HandleSoilMoisture;
 using Asn.Diplomski.Application.UseCases.HandleTemperature;
 using Asn.Diplomski.Application.UseCases.HandleWaterLevel;
@@ -57,6 +58,33 @@ namespace Asn.Diplomski.Server.Mqtt
 
             command = new HandleTemperatureCommand(tenantId, deviceId, sensorId, value);
             return true;
+        }
+
+        public static bool TryMapToDeviceStatus(
+            string topic,
+            string payload,
+            out HandleDeviceStatusCommand command)
+        {
+            command = default!;
+
+            if (!MqttTopics.TryParseStatusTopic(topic, out var tenantId, out var deviceId))
+                return false;
+
+            try
+            {
+                var doc = JsonDocument.Parse(payload);
+                if (!doc.RootElement.TryGetProperty("event", out var prop))
+                    return false;
+                var eventName = prop.GetString();
+                if (string.IsNullOrEmpty(eventName))
+                    return false;
+                command = new HandleDeviceStatusCommand(tenantId, deviceId, eventName);
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
         private static bool TryParseValue(string payload, out double value)

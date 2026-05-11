@@ -1,78 +1,75 @@
 import { useEffect, useState, useCallback } from 'react'
-import { getTenant } from '../api'
-import type { TenantResponse, SensorResponse } from '../types'
+import { useNavigate } from 'react-router-dom'
+import { getMe } from '../api'
+import { useAuth } from '../context/AuthContext'
+import type { TenantResponse } from '../types'
 import { formatDateTime } from '../types'
 import DeviceCard from '../components/DeviceCard'
-import SensorDetail from '../components/SensorDetail'
+import ProvisioningGuide from '../components/ProvisioningGuide'
 
-interface Props {
-  id: number
-  onBack: () => void
-}
+export default function TenantView() {
+  const { signOut } = useAuth()
+  const navigate = useNavigate()
 
-export default function TenantView({ id, onBack }: Props) {
   const [tenant, setTenant] = useState<TenantResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [selectedSensor, setSelectedSensor] = useState<SensorResponse | null>(null)
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     else setRefreshing(true)
     setError(null)
     try {
-      const data = await getTenant(id)
+      const data = await getMe()
       setTenant(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tenant')
+      const msg = err instanceof Error ? err.message : 'Failed to load'
+      if (msg.includes('Session expired')) {
+        signOut()
+        navigate('/signin', { replace: true })
+        return
+      }
+      setError(msg)
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [id])
+  }, [signOut, navigate])
 
   useEffect(() => { load() }, [load])
 
-  // Auto-refresh every 30s
   useEffect(() => {
     const timer = setInterval(() => load(true), 30_000)
     return () => clearInterval(timer)
   }, [load])
 
+  function handleSignOut() {
+    signOut()
+    navigate('/signin', { replace: true })
+  }
+
   if (loading) {
     return (
-      <div>
-        <button className="back-btn" onClick={onBack}>← Back</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-1)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-          <div className="spinner" /> Loading tenant {id}…
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-1)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+        <div className="spinner" /> Loading…
       </div>
     )
   }
 
   if (error) {
-    return (
-      <div>
-        <button className="back-btn" onClick={onBack}>← Back</button>
-        <div className="msg msg-error">{error}</div>
-      </div>
-    )
+    return <div className="msg msg-error">{error}</div>
   }
 
   if (!tenant) return null
 
-  if (selectedSensor) {
-    return <SensorDetail sensor={selectedSensor} onClose={() => setSelectedSensor(null)} />
-  }
-
   const nil = (v: string | null) =>
     v ? <span className="info-val">{v}</span> : <span className="info-val nil">—</span>
 
+  const hasUnprovisioned = tenant.devices.some(d => d.provisionStatus !== 'Provisioned')
+
   return (
     <div>
-      <button className="back-btn" onClick={onBack}>← All Tenants</button>
-
       {/* Header */}
       <div className="tenant-header">
         <div>
@@ -97,6 +94,9 @@ export default function TenantView({ id, onBack }: Props) {
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-2)', textAlign: 'right', letterSpacing: 1 }}>
             AUTO·REFRESH<br />30s
           </div>
+          <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>
+            Sign Out
+          </button>
         </div>
       </div>
 
@@ -112,7 +112,9 @@ export default function TenantView({ id, onBack }: Props) {
         </div>
         <div className="info-item">
           <div className="info-key">Updated</div>
-          {tenant.updatedAt ? <div className="info-val">{formatDateTime(tenant.updatedAt)}</div> : <div className="info-val nil">—</div>}
+          {tenant.updatedAt
+            ? <div className="info-val">{formatDateTime(tenant.updatedAt)}</div>
+            : <div className="info-val nil">—</div>}
         </div>
         <div className="info-item">
           <div className="info-key">Contact Person</div>
@@ -136,6 +138,11 @@ export default function TenantView({ id, onBack }: Props) {
         </div>
       </div>
 
+      {/* Provisioning guide — shown only when needed */}
+      {hasUnprovisioned && (
+        <ProvisioningGuide devices={tenant.devices} />
+      )}
+
       {/* Devices */}
       <div className="section-head">
         <span className="section-label">Devices</span>
@@ -153,7 +160,6 @@ export default function TenantView({ id, onBack }: Props) {
             <DeviceCard
               key={device.id}
               device={device}
-              onSensorClick={setSelectedSensor}
             />
           ))}
         </div>

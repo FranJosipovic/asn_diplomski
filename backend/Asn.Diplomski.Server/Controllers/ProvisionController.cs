@@ -2,6 +2,8 @@ using Asn.Diplomski.Application.Interfaces;
 using Asn.Diplomski.Application.UseCases.CompleteDeviceProvisioning;
 using Asn.Diplomski.Application.UseCases.ConfirmMqttConnection;
 using Asn.Diplomski.Application.UseCases.GetProvisioningToken;
+using Asn.Diplomski.Application.UseCases.RequestReprovision;
+using Asn.Diplomski.Application.UseCases.SetDeviceProvisioningReady;
 using Asn.Diplomski.Server.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +20,8 @@ namespace Asn.Diplomski.Server.Controllers
         private readonly GetProvisioningTokenHandler _getProvisioningTokenHandler;
         private readonly CompleteDeviceProvisioningHandler _completeDeviceProvisioningHandler;
         private readonly ConfirmMqttConnectionHandler _confirmMqttConnectionHandler;
+        private readonly RequestReprovisionHandler _requestReprovisionHandler;
+        private readonly SetDeviceProvisioningReadyHandler _setDeviceProvisioningReadyHandler;
         private readonly IDeviceRepository _deviceRepository;
         private readonly IMqttPublisher _mqttPublisher;
         private readonly IConfiguration _configuration;
@@ -27,6 +31,8 @@ namespace Asn.Diplomski.Server.Controllers
             GetProvisioningTokenHandler getProvisioningTokenHandler,
             CompleteDeviceProvisioningHandler completeDeviceProvisioningHandler,
             ConfirmMqttConnectionHandler confirmMqttConnectionHandler,
+            RequestReprovisionHandler requestReprovisionHandler,
+            SetDeviceProvisioningReadyHandler setDeviceProvisioningReadyHandler,
             IDeviceRepository deviceRepository,
             IMqttPublisher mqttPublisher,
             IConfiguration configuration,
@@ -35,6 +41,8 @@ namespace Asn.Diplomski.Server.Controllers
             _getProvisioningTokenHandler = getProvisioningTokenHandler;
             _completeDeviceProvisioningHandler = completeDeviceProvisioningHandler;
             _confirmMqttConnectionHandler = confirmMqttConnectionHandler;
+            _requestReprovisionHandler = requestReprovisionHandler;
+            _setDeviceProvisioningReadyHandler = setDeviceProvisioningReadyHandler;
             _deviceRepository = deviceRepository;
             _mqttPublisher = mqttPublisher;
             _configuration = configuration;
@@ -73,7 +81,7 @@ namespace Asn.Diplomski.Server.Controllers
                     DeviceId = d.DeviceId,
                     DeviceType = d.DeviceType.ToString(),
                     DeviceSsid = d.DeviceSsid,
-                    ProvisionStatus = d.ProvisionStatus.ToString(),
+                    ProvisionStatus = d.Status.ToString(),
                     ProvisioningToken = d.ProvisioningToken,
                     Sensors = d.Sensors.Select(s => new SensorProvisioningDto
                     {
@@ -154,6 +162,58 @@ namespace Asn.Diplomski.Server.Controllers
             return NoContent();
         }
 
+        [HttpPost("reprovision")]
+        [AllowAnonymous]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> RequestReprovision([FromBody] ReprovisionRequestDto request)
+        {
+            var command = new RequestReprovisionCommand(request.TenantId, request.DeviceId);
+            var result = await _requestReprovisionHandler.HandleAsync(command);
+
+            if (result.IsNotFound)
+            {
+                _logger.LogWarning("Reprovizioniranje odbijena — uređaj {DeviceId} nije pronađen za tenant {TenantId}",
+                    request.DeviceId, request.TenantId);
+                return NotFound(new { message = "Uređaj nije pronađen." });
+            }
+
+            _logger.LogInformation("Uređaj {DeviceId} (tenant {TenantId}) pokrenuo reprovizioniranje — novi token izdan",
+                request.DeviceId, request.TenantId);
+            return NoContent();
+        }
+
+        [HttpPost("device-ready")]
+        [ProducesResponseType(typeof(SetDeviceProvisioningReadyResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> SetDeviceProvisioningReady([FromBody] SetDeviceProvisioningReadyRequestDto request)
+        {
+            var tenantIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (tenantIdClaim == null || !long.TryParse(tenantIdClaim.Value, out var tenantId))
+                return Unauthorized(new { message = "Ne mogu ekstrahirati tenant ID iz JWT tokena." });
+
+            var command = new SetDeviceProvisioningReadyCommand(tenantId, request.DeviceId);
+            var result = await _setDeviceProvisioningReadyHandler.HandleAsync(command);
+
+            if (result.IsNotFound)
+            {
+                _logger.LogWarning("SetDeviceProvisioningReady odbijen — uređaj {DeviceId} nije pronađen za tenant {TenantId}",
+                    request.DeviceId, tenantId);
+                return NotFound(new { message = "Uređaj nije pronađen." });
+            }
+
+            _logger.LogInformation("Uređaj {DeviceId} (tenant {TenantId}) postavljen u ProvisioningReady",
+                request.DeviceId, tenantId);
+
+            return Ok(new SetDeviceProvisioningReadyResponseDto
+            {
+                DeviceId = request.DeviceId,
+                ProvisioningToken = result.ProvisioningToken!,
+                ExpiresAt = result.ExpiresAt
+            });
+        }
+
         [HttpPost("start")]
         [ProducesResponseType(typeof(StartSystemResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -166,7 +226,7 @@ namespace Asn.Diplomski.Server.Controllers
                 return Unauthorized(new { message = "Ne mogu ekstrahirati tenant ID iz JWT tokena." });
             }
 
-            var devices = await _deviceRepository.GetAllProvisionedByTenantAsync(tenantId);
+            var devices = await _deviceRepository.GetAllCommandableByTenantAsync(tenantId);
 
             foreach (var device in devices)
                 _mqttPublisher.Enqueue(tenantId, device.Id, new { command = "start" });
@@ -175,6 +235,33 @@ namespace Asn.Diplomski.Server.Controllers
                 tenantId, devices.Count);
 
             return Ok(new StartSystemResponseDto
+            {
+                NotifiedDeviceCount = devices.Count,
+                NotifiedDeviceIds = devices.Select(d => d.Id).ToList()
+            });
+        }
+
+        [HttpPost("stop")]
+        [ProducesResponseType(typeof(StopSystemResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> StopSystem()
+        {
+            var tenantIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (tenantIdClaim == null || !long.TryParse(tenantIdClaim.Value, out var tenantId))
+            {
+                _logger.LogWarning("Stop zahtjev odbijen — ne mogu ekstrahirati tenant ID iz JWT");
+                return Unauthorized(new { message = "Ne mogu ekstrahirati tenant ID iz JWT tokena." });
+            }
+
+            var devices = await _deviceRepository.GetAllCommandableByTenantAsync(tenantId);
+
+            foreach (var device in devices)
+                _mqttPublisher.Enqueue(tenantId, device.Id, new { command = "stop" });
+
+            _logger.LogInformation("Tenant {TenantId} zaustavio sustav — poslana 'stop' naredba na {Count} uređaja",
+                tenantId, devices.Count);
+
+            return Ok(new StopSystemResponseDto
             {
                 NotifiedDeviceCount = devices.Count,
                 NotifiedDeviceIds = devices.Select(d => d.Id).ToList()

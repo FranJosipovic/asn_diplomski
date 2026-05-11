@@ -35,4 +35,14 @@ interface AsnApi {
     suspend fun getProvisioningConfig(
         @Header("Authorization") token: String
     ): ProvisioningTokenResponse
+
+    @POST("/api/Provision/start")
+    suspend fun startProvision(
+        @Header("Authorization") token: String
+    ): Map<String, Any>
+
+    @POST("/api/Provision/stop")
+    suspend fun stopProvision(
+        @Header("Authorization") token: String
+    ): Map<String, Any>
 }

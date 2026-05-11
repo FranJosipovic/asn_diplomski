@@ -28,3 +28,23 @@ data class DeviceProvisionInfo(
     val serverHost: String,
     val serverPort: Int
 )
+
+data class ProvisionDevice(
+    val deviceId: Long,
+    val deviceType: String,
+    val deviceSsid: String,
+    val provisionStatus: String
+)
+
+data class TenantProfile(
+    val id: Long,
+    val name: String,
+    val email: String,
+    val plan: String,
+    val phoneNumber: String?,
+    val contactPersonName: String?,
+    val street: String?,
+    val city: String?,
+    val postalCode: String?,
+    val country: String?
+)

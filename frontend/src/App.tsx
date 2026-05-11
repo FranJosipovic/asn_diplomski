@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
-import HomeView from './views/HomeView'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import AuthView from './views/AuthView'
 import TenantView from './views/TenantView'
-import { getStoredTenants, storeTenant } from './types'
-import type { TenantResponse, StoredTenant } from './types'
-
-type View = { kind: 'home' } | { kind: 'tenant'; id: number }
+import SensorDetailPage from './views/SensorDetailPage'
 
 function Clock() {
   const [time, setTime] = useState(new Date())
@@ -19,19 +18,18 @@ function Clock() {
   )
 }
 
-export default function App() {
-  const [view, setView] = useState<View>({ kind: 'home' })
-  const [recentTenants, setRecentTenants] = useState<StoredTenant[]>(() => getStoredTenants())
+function GuestRoute() {
+  const { auth } = useAuth()
+  return auth ? <Navigate to="/dashboard" replace /> : <Outlet />
+}
 
-  function openTenant(id: number) {
-    setView({ kind: 'tenant', id })
-  }
+function ProtectedRoute() {
+  const { auth } = useAuth()
+  return auth ? <Outlet /> : <Navigate to="/signin" replace />
+}
 
-  function handleTenantCreated(tenant: TenantResponse) {
-    storeTenant(tenant)
-    setRecentTenants(getStoredTenants())
-  }
-
+function AppShell() {
+  const { auth } = useAuth()
   return (
     <>
       <header className="header">
@@ -40,13 +38,10 @@ export default function App() {
             <div className="header-mark-inner" />
           </div>
           <div className="header-wordmark">
-            <div className="header-title">
-              ASN<span> Control</span>
-            </div>
+            <div className="header-title">ASN<span> Control</span></div>
             <div className="header-sub">Automated Irrigation System</div>
           </div>
         </div>
-
         <div className="header-right">
           <Clock />
           <div className="sys-status">
@@ -57,19 +52,28 @@ export default function App() {
       </header>
 
       <main className="main">
-        {view.kind === 'home' ? (
-          <HomeView
-            recentTenants={recentTenants}
-            onOpenTenant={id => openTenant(id)}
-            onTenantCreated={handleTenantCreated}
-          />
-        ) : (
-          <TenantView
-            id={view.id}
-            onBack={() => setView({ kind: 'home' })}
-          />
-        )}
+        <Routes>
+          <Route element={<GuestRoute />}>
+            <Route path="/signin" element={<AuthView defaultTab="signin" />} />
+            <Route path="/register" element={<AuthView defaultTab="register" />} />
+          </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<TenantView />} />
+            <Route path="/dashboard/sensor/:sensorId" element={<SensorDetailPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to={auth ? '/dashboard' : '/signin'} replace />} />
+        </Routes>
       </main>
     </>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </BrowserRouter>
   )
 }

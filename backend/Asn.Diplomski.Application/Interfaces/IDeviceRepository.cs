@@ -12,6 +12,8 @@ namespace Asn.Diplomski.Application.Interfaces
         Task<Device?> GetByProvisioningTokenAsync(string token);
         Task<Device?> GetByProvisioningTokenIgnoringExpiryAsync(string token);
         Task<Device?> GetByIdAndTenantAsync(long deviceId, long tenantId);
+        Task<Device?> GetByIdAndTenantWithSensorsAsync(long deviceId, long tenantId);
         Task<IReadOnlyList<Device>> GetAllProvisionedByTenantAsync(long tenantId);
+        Task<IReadOnlyList<Device>> GetAllCommandableByTenantAsync(long tenantId);
     }
 }

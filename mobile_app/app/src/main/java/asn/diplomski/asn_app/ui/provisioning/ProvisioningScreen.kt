@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -24,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -38,28 +39,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import asn.diplomski.asn_app.domain.model.ProvisionDevice
 import com.espressif.provisioning.WiFiAccessPoint
 
 @Composable
 internal fun ProvisioningRoute(
-    deviceId: Long,
-    onNavigateBack: () -> Unit,
     viewModel: ProvisioningViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(deviceId) {
-        viewModel.setDeviceId(deviceId)
+    LaunchedEffect(Unit) {
+        viewModel.onAction(ProvisioningAction.LoadDevices)
     }
 
     ProvisioningScreen(
         uiState = uiState,
-        onAction = viewModel::onAction,
-        onNavigateBack = onNavigateBack
+        onAction = viewModel::onAction
     )
 }
 
@@ -67,19 +67,25 @@ internal fun ProvisioningRoute(
 @Composable
 internal fun ProvisioningScreen(
     uiState: ProvisioningUiState,
-    onAction: (ProvisioningAction) -> Unit,
-    onNavigateBack: () -> Unit
+    onAction: (ProvisioningAction) -> Unit
 ) {
+    val inProvisioningFlow = uiState !is ProvisioningUiState.LoadingDevices &&
+            uiState !is ProvisioningUiState.DeviceList
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Provision Device") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+            if (inProvisioningFlow) {
+                TopAppBar(
+                    title = { Text("Provision Device") },
+                    navigationIcon = {
+                        IconButton(onClick = { onAction(ProvisioningAction.BackToList) }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(title = { Text("Provisioning") })
+            }
         }
     ) { paddingValues ->
         Box(
@@ -89,6 +95,8 @@ internal fun ProvisioningScreen(
                 .padding(16.dp)
         ) {
             when (uiState) {
+                is ProvisioningUiState.LoadingDevices -> LoadingStep("Loading devices…")
+                is ProvisioningUiState.DeviceList -> DeviceListStep(uiState.devices, onAction)
                 is ProvisioningUiState.Idle -> IdleStep(onAction)
                 is ProvisioningUiState.FetchingConfig -> LoadingStep("Fetching provisioning config…")
                 is ProvisioningUiState.ConnectingToDevice -> LoadingStep("Connecting to device…")
@@ -97,8 +105,93 @@ internal fun ProvisioningScreen(
                 is ProvisioningUiState.NetworksFound -> SelectNetworkStep(uiState.networks, onAction)
                 is ProvisioningUiState.Provisioning -> LoadingStep("Provisioning device…")
                 is ProvisioningUiState.WaitingForMqtt -> LoadingStep("Waiting for device to connect to MQTT…")
-                is ProvisioningUiState.Success -> SuccessStep(onNavigateBack)
+                is ProvisioningUiState.Success -> SuccessStep(onAction)
                 is ProvisioningUiState.Error -> ErrorStep(uiState.message, onAction)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceListStep(
+    devices: List<ProvisionDevice>,
+    onAction: (ProvisioningAction) -> Unit
+) {
+    if (devices.isEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "No devices found.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = { onAction(ProvisioningAction.LoadDevices) }) {
+                Text("Refresh")
+            }
+        }
+        return
+    }
+
+    Column {
+        Text(
+            text = "Select a device to provision",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(devices) { device ->
+                ProvisionDeviceCard(device = device, onAction = onAction)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProvisionDeviceCard(
+    device: ProvisionDevice,
+    onAction: (ProvisioningAction) -> Unit
+) {
+    val canProvision = device.provisionStatus == "NotProvisioned" ||
+            device.provisionStatus == "ProvisioningReady"
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = device.deviceSsid,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = device.deviceType,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = device.provisionStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = when (device.provisionStatus) {
+                        "Ready", "Working" -> MaterialTheme.colorScheme.primary
+                        "Provisioning", "ProvisioningReady" -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            if (canProvision) {
+                Button(onClick = { onAction(ProvisioningAction.SelectDevice(device.deviceId)) }) {
+                    Text("Provision")
+                }
             }
         }
     }
@@ -107,9 +200,9 @@ internal fun ProvisioningScreen(
 @Composable
 private fun IdleStep(onAction: (ProvisioningAction) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = "Provision Device", style = MaterialTheme.typography.titleLarge)
+        Text(text = "Ready to Provision", style = MaterialTheme.typography.titleLarge)
         Text(
-            text = "Make sure the device is powered on and in provisioning mode.",
+            text = "Make sure the device is powered on and in provisioning mode (blinking purple LED).",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -210,7 +303,7 @@ private fun LoadingStep(message: String) {
 }
 
 @Composable
-private fun SuccessStep(onNavigateBack: () -> Unit) {
+private fun SuccessStep(onAction: (ProvisioningAction) -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -232,8 +325,11 @@ private fun SuccessStep(onNavigateBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onNavigateBack, modifier = Modifier.fillMaxWidth()) {
-            Text("Back to Devices")
+        Button(
+            onClick = { onAction(ProvisioningAction.BackToList) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to Device List")
         }
     }
 }
@@ -263,6 +359,13 @@ private fun ErrorStep(message: String, onAction: (ProvisioningAction) -> Unit) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Try Again")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = { onAction(ProvisioningAction.BackToList) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to Device List")
         }
     }
 }

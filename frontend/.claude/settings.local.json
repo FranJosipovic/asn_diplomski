@@ -7,7 +7,10 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\frontend\\\\src\" -Recurse | Select-Object FullName, @{Name=\"Type\"; Expression={if \\($_.PSIsContainer\\) {\"Dir\"} else {\"File\"}}} | Format-Table -AutoSize | head -50)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\frontend\\\\src\" -Recurse | Select-Object FullName, @{Name=\"Type\"; Expression={if \\($_.PSIsContainer\\) {\"Dir\"} else {\"File\"}}} | Select-Object -First 100)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Fran\\\\Workspace\\\\Projects\\\\Automatski ustav za navodnjavanje\\\\frontend\" -Force | Where-Object { $_.Name -match '\\\\.\\(md|config|rules\\)' -or $_.Name -in @\\('.env', '.env.example', '.gitignore'\\) } | Select-Object Name)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(JSON.stringify\\({deps: p.dependencies, dev: p.devDependencies}, null, 2\\)\\)\")",
+      "Bash(npm install *)"
     ]
   }
 }

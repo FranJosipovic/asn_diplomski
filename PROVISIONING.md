@@ -1,32 +1,75 @@
-# Device Provisioning Flow
+# Device Provisioning & System Control
 
 ## Overview
 
-Provisioning connects an ESP device to the system in three stages:
+Provisioning connects a physical ESP32 device to the backend so it can receive commands and publish sensor data. The full lifecycle from factory-fresh to actively irrigating involves three actors:
 
-```
-NOT_PROVISIONED → (WiFi + token exchange) → PROVISIONING → (MQTT confirmed) → PROVISIONED
-```
-
-The mobile app drives the first stage. The device drives the rest automatically.
+- **Mobile app** — drives initial setup, polls status, starts/stops the system
+- **Server** — issues tokens, exposes HTTP endpoints, subscribes to MQTT topics
+- **Device** — connects to WiFi, exchanges the provisioning token, joins MQTT, responds to commands
 
 ---
 
-## Prerequisites
+## Device State Machine
 
-- User is signed in → has a valid JWT access token
-- ESP device is powered on and **never provisioned before** (or was factory-reset via RESET_PIN)
-- ESP is broadcasting a SoftAP with SSID matching its `deviceSsid` (e.g. `SensorUnit_9`)
+```
+NotProvisioned
+      │
+      │  GET /api/provision called by mobile app
+      ▼
+ProvisioningReady
+      │
+      │  Device POSTs token → POST /api/provision
+      ▼
+Provisioning
+      │
+      │  Device confirms MQTT → POST /api/provision/confirm
+      ▼
+Ready ◄────────────────────────────────────────────┐
+      │                                             │
+      │  Device receives {"command":"start"}        │
+      │  Device publishes {"event":"started"}       │
+      ▼                                             │
+Working                                             │
+      │                                             │
+      │  Device receives {"command":"stop"}         │
+      │  Device publishes {"event":"stopped"}       │
+      ▼                                             │
+Stopped ─────────────────────────────────────────── ┘
+                  (start restarts from Stopped)
+```
+
+| State | Who sets it | Condition |
+|---|---|---|
+| `NotProvisioned` | Initial / factory reset | Device has never been provisioned |
+| `ProvisioningReady` | Server | `GET /api/provision` called; token generated |
+| `Provisioning` | Server | Device exchanged token via `POST /api/provision` |
+| `Ready` | Server | Device confirmed MQTT via `POST /api/provision/confirm` |
+| `Working` | Server | Received `{"event":"started"}` on MQTT status topic |
+| `Stopped` | Server | Received `{"event":"stopped"}` on MQTT status topic |
+
+---
+
+## MQTT Topic Reference
+
+| Direction | Topic | Payload |
+|---|---|---|
+| Server → Device | `tenant_{id}/device_{id}/command` | `{"command":"start"}` or `{"command":"stop"}` |
+| Device → Server | `tenant_{id}/device_{id}/sensor_{sensorId}/temperature` | `{"value":23.5,"unit":"°C","timestamp":"..."}` |
+| Device → Server | `tenant_{id}/device_{id}/sensor_{sensorId}/soil` | `{"value":62,"unit":"%","timestamp":"..."}` |
+| Device → Server | `tenant_{id}/device_{id}/sensor_{sensorId}/water-level` | `{"value":85,"unit":"%","timestamp":"..."}` |
+| Device → Server | `tenant_{id}/device_{id}/status` | `{"event":"started"}` or `{"event":"stopped"}` |
+
+The server subscribes to all device topics at `POST /api/provision/confirm` time. On MQTT broker reconnect, it automatically re-subscribes to all previously registered topics.
 
 ---
 
 ## Step-by-step
 
-### 1. Fetch provisioning data — `GET /api/provision`
+### Step 1 — Mobile app: fetch provisioning data
 
-**Auth:** Bearer JWT
+**`GET /api/provision`** — requires Bearer JWT
 
-**Response:**
 ```json
 {
   "expiresAt": "2025-01-01T00:15:00Z",
@@ -36,7 +79,7 @@ The mobile app drives the first stage. The device drives the rest automatically.
     {
       "deviceId": 2,
       "deviceType": "SensorUnit",
-      "deviceSsid": "SensorUnit_9",
+      "deviceSsid": "SensorUnit_2",
       "provisionStatus": "NotProvisioned",
       "provisioningToken": "abc123...",
       "sensors": [
@@ -47,7 +90,7 @@ The mobile app drives the first stage. The device drives the rest automatically.
     {
       "deviceId": 5,
       "deviceType": "PumpUnit",
-      "deviceSsid": "PumpUnit_1",
+      "deviceSsid": "PumpUnit_5",
       "provisionStatus": "NotProvisioned",
       "provisioningToken": "xyz789...",
       "sensors": [...]
@@ -56,34 +99,34 @@ The mobile app drives the first stage. The device drives the rest automatically.
 }
 ```
 
-**Notes:**
-- Tokens expire after **15 minutes** (`expiresAt`). If expired, call this endpoint again to get fresh tokens.
-- Only provision devices where `provisionStatus == "NotProvisioned"`. Skip `"Provisioning"` or `"Provisioned"` devices.
-- `serverHost` + `serverPort` is what you send to the device so it knows where to call back.
+**What happens on the server:** for each device with status `NotProvisioned` (or `ProvisioningReady` with an expired token), a new 64-byte cryptographic provisioning token is generated and stored with a 15-minute expiry. Device status is set to `ProvisioningReady`.
+
+**Mobile app rules:**
+- Only provision devices where `provisionStatus == "NotProvisioned"` or `"ProvisioningReady"`. Skip `"Provisioning"`, `"Ready"`, `"Working"`, `"Stopped"` — those are already configured.
+- Save `serverHost` and `serverPort` — these are sent to the device so it knows where to call back.
+- Token expires in 15 minutes (`expiresAt`). If it expires before you finish, call this endpoint again.
 
 ---
 
-### 2. For each device — connect to its SoftAP
+### Step 2 — Mobile app: connect to device SoftAP
 
-- Disconnect phone from current WiFi
-- Connect to the device's SoftAP: SSID = `deviceSsid` from the response (e.g. `SensorUnit_9`), no password
-- The device runs an HTTP server on `192.168.4.1` (ESP-IDF SoftAP default)
+For each device that needs provisioning:
+
+1. Disconnect phone from current WiFi
+2. Connect to the device's SoftAP — SSID = `deviceSsid` from the response (e.g. `SensorUnit_2`), no password
+3. The device runs an HTTP server at `192.168.4.1` (ESP-IDF SoftAP default)
+
+**Important:** provisioning is one-device-at-a-time. If you have two devices, repeat steps 2–4 for each.
 
 ---
 
-### 3. Send provisioning data to the device
+### Step 3 — Mobile app: send provisioning data to device
 
-Two things must be sent to the device while connected to its SoftAP:
+Two things must be sent while connected to the SoftAP:
 
-**a) WiFi credentials** — via ESP-IDF provisioning protocol (BLE or SoftAP scheme)
-- Use the Espressif `provisioning` Android SDK
-- Send the home/office WiFi SSID + password the device should connect to
+**a) Backend token + server address** — via custom `prov-data` endpoint (send this **first**):
 
-**b) Backend token + server address** — via custom `prov-data` endpoint
-- POST to `http://192.168.4.1/proto-ver` first to verify connection (optional, SDK handles this)
-- Send custom data via the `prov-data` endpoint (SDK: `sendDataToCustomEndpoint`)
-
-Payload to send to `prov-data`:
+POST to `http://192.168.4.1/prov-data`:
 ```json
 {
   "token": "abc123...",
@@ -92,35 +135,50 @@ Payload to send to `prov-data`:
 }
 ```
 
-**Order matters:** send the `prov-data` custom data **before** sending WiFi credentials, otherwise the device may reboot and connect to WiFi before saving the token.
+Use the Espressif provisioning SDK (`sendDataToCustomEndpoint`) to reach this endpoint. Bind the HTTP client to the WiFi network interface explicitly — Android may route through cellular otherwise.
+
+**b) WiFi credentials** — via the ESP-IDF provisioning protocol (SoftAP scheme, Security 0):
+- Use the Espressif `provisioning` Android SDK (`ESPProvisionManager`)
+- Send the home/office WiFi SSID + password the device should connect to
+
+**Order matters:** send `prov-data` **before** sending WiFi credentials. The device reboots once WiFi credentials are applied — if the token isn't saved yet, it'll be lost.
 
 ---
 
-### 4. Device takes over automatically
+### Step 4 — Device takes over automatically (no app interaction needed)
 
-Once it receives both:
-1. Device connects to WiFi
-2. Device POSTs `token` to `POST /api/provision/{token}` → receives MQTT credentials → status becomes `Provisioning`
+Once the device has both the token and WiFi credentials:
+
+1. Device connects to home WiFi
+2. Device POSTs `{"token":"abc123..."}` to `POST /api/provision` → server returns MQTT credentials and sensor IDs → device status becomes `Provisioning`
 3. Device connects to MQTT broker
-4. Device POSTs `POST /api/provision/confirm` → status becomes `Provisioned`
+4. Device POSTs `{"tenantId":1,"deviceId":2}` to `POST /api/provision/confirm` → server registers all MQTT subscriptions → device status becomes `Ready`
+5. Device LED turns solid blue — ready and waiting for a start command
 
-The app doesn't need to do anything during this phase — just wait and poll.
-
----
-
-### 5. Poll until all devices are Provisioned
-
-Call `GET /api/provision` every ~3 seconds until all devices show `provisionStatus == "Provisioned"`.
-
-Timeout after ~2 minutes — if a device is still `Provisioning` after that, show an error (device may have failed to connect to MQTT).
+The mobile app should poll during this phase to show progress.
 
 ---
 
-### 6. Start the system — `POST /api/provision/start`
+### Step 5 — Mobile app: poll until device is Ready
 
-**Auth:** Bearer JWT — no request body needed.
+Call `GET /api/provision` every ~3–5 seconds.
 
-**Response:**
+Watch the `provisionStatus` field on each device:
+
+| Status | UI |
+|---|---|
+| `ProvisioningReady` | Waiting for device to connect to WiFi |
+| `Provisioning` | Device connected to WiFi, joining MQTT |
+| `Ready` | Device fully configured — provisioning complete |
+
+**Timeout:** if a device stays in `Provisioning` for more than 2 minutes, show an error. The device likely can't reach the MQTT broker (check firewall, broker address).
+
+---
+
+### Step 6 — Mobile app: start the system
+
+**`POST /api/provision/start`** — requires Bearer JWT, no body
+
 ```json
 {
   "notifiedDeviceCount": 2,
@@ -128,42 +186,120 @@ Timeout after ~2 minutes — if a device is still `Provisioning` after that, sho
 }
 ```
 
-This publishes a `{ "command": "start" }` MQTT message to every `Provisioned` device. The devices begin their sensor loop immediately.
+This publishes `{"command":"start"}` via MQTT to all devices with status `Ready`, `Working`, or `Stopped`. Each device:
+1. Sets `systemStarted = true`
+2. Switches LED to blinking green
+3. Publishes `{"event":"started"}` to its status topic
+4. Server receives event → transitions device to `Working`
+
+Only call this once all devices are `Ready`.
 
 ---
 
-## State reference
+### Step 7 — Stop the system
 
-| Status | Meaning |
-|---|---|
-| `NotProvisioned` | Fresh device, never configured |
-| `Provisioning` | Device has MQTT credentials, connecting to broker |
-| `Provisioned` | Device confirmed MQTT connection, ready to start |
+**`POST /api/provision/stop`** — requires Bearer JWT, no body
+
+```json
+{
+  "notifiedDeviceCount": 2,
+  "notifiedDeviceIds": [2, 5]
+}
+```
+
+Publishes `{"command":"stop"}` to all `Ready`, `Working`, and `Stopped` devices. Each device:
+1. Sets `systemStarted = false`
+2. Switches LED to solid red
+3. Publishes `{"event":"stopped"}` to its status topic
+4. Server receives event → transitions device to `Stopped`
+
+Calling `POST /api/provision/start` after this restarts the system — `Stopped` devices are included in the start target.
 
 ---
 
-## Error cases to handle in the app
+## API Quick Reference
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/api/provision` | JWT | Fetch provisioning data + tokens for all devices |
+| `POST` | `/api/provision` | None | Device exchanges provisioning token for MQTT config |
+| `POST` | `/api/provision/confirm` | None | Device confirms MQTT connection; server subscribes |
+| `POST` | `/api/provision/start` | JWT | Send start command to all commandable devices |
+| `POST` | `/api/provision/stop` | JWT | Send stop command to all commandable devices |
+
+### POST /api/provision — Device → Server
+
+Request body (device sends this):
+```json
+{ "token": "abc123..." }
+```
+
+Response:
+```json
+{
+  "tenantId": 1,
+  "deviceId": 2,
+  "mqttHost": "192.168.1.100",
+  "mqttPort": 1883,
+  "sensors": [
+    { "sensorId": 3, "sensorType": "Temperature" },
+    { "sensorId": 4, "sensorType": "SoilMoisture" }
+  ]
+}
+```
+
+Error responses: `404` token not found, `410` token expired.
+
+### POST /api/provision/confirm — Device → Server
+
+Request body:
+```json
+{ "tenantId": 1, "deviceId": 2 }
+```
+
+Response: `204 No Content`
+
+Error responses: `404` device not found, `409` device not in `Provisioning` state.
+
+---
+
+## Device LED Reference
+
+| LED | State | Meaning |
+|---|---|---|
+| Solid orange | `NotProvisioned` | No WiFi credentials stored |
+| Blinking purple | Provisioning SoftAP | Waiting for mobile app |
+| Blinking blue | `ProvisioningReady` / `Provisioning` | Talking to backend or joining MQTT |
+| Solid blue | `Ready` | MQTT connected, waiting for start |
+| Blinking green | `Working` | Sending sensor data |
+| Solid red | `Stopped` | Received stop command |
+
+---
+
+## Error Handling
 
 | Situation | What to do |
 |---|---|
-| Token expired before provisioning | Re-call `GET /api/provision` to get fresh tokens |
-| Device SoftAP not found | Ask user to power-cycle device, retry |
-| `prov-data` send fails | Retry, or restart provisioning for that device |
-| Device stuck in `Provisioning` after 2 min | Check if MQTT broker is reachable; show error |
-| `POST /api/provision/start` returns 0 notified devices | No devices are `Provisioned` yet, wait and retry |
+| Token expired before provisioning | Re-call `GET /api/provision` for fresh tokens |
+| Device SoftAP not found | Power-cycle device; retry |
+| `prov-data` POST fails | Retry; or send again before WiFi credentials |
+| Device stays `Provisioning` > 2 min | MQTT broker unreachable — check broker IP and firewall |
+| `start` returns 0 notified devices | No devices in commandable state; check device status |
+| Device LED stays orange after reset | Provisioning failed; hold RESET_PIN to factory-reset |
 
 ---
 
-## Things potentially missing / worth discussing
+## Re-provisioning
 
-- **Provisioning multiple devices** — current flow provisions one device at a time (phone connects to one SoftAP). If there are 2 devices, you repeat steps 2–4 for each. There is no parallel provisioning.
+To move a device to a new WiFi network:
+1. Hold RESET_PIN (GPIO 0) low on boot — device clears all stored config and restarts
+2. Backend keeps the device record with its sensors intact
+3. Call `GET /api/provision` — new token is generated, status resets to `ProvisioningReady`
+4. Repeat provisioning from Step 2
 
-- **Re-provisioning a device** — if a device needs to move to a new WiFi network, it must be factory-reset (hold RESET_PIN low on boot). The backend keeps the device record; a new provisioning token is generated on the next `GET /api/provision` call. The backend should probably reset the device's `provisionStatus` back to `NotProvisioned` when a new token is issued.
+---
 
-- **`serverHost` reliability** — the app sends its own IP (`serverHost` from `GET /api/provision` response) to the device. If the backend is behind NAT or the phone is on a different network than the backend this will break. Make sure `serverHost` is the LAN IP of the server, not `localhost`.
+## Security Notes
 
-- **Token is sent in plaintext over SoftAP** — the SoftAP connection is open (no WiFi password) and the HTTP call to `prov-data` is plain HTTP. Anyone nearby could sniff the provisioning token. For a thesis project this is fine; for production you'd use `NETWORK_PROV_SECURITY_1` (SRP-based encryption).
-
-- **No feedback from device to app during stage 4** — the app can only infer progress by polling `GET /api/provision`. A WebSocket or SSE push from the backend when status changes would give a smoother UX.
-
-- **`POST /api/provision/start` starts all provisioned devices** — there is no way to start a single device. If one device provisioned and another didn't, calling start will start the first one. Consider whether that's the desired behavior or if start should require all devices to be provisioned first.
+- Provisioning token is sent as plain HTTP over the SoftAP connection (open network). Anyone nearby could sniff it during the ~30 second window. Acceptable for a thesis/lab environment; production would use `NETWORK_PROV_SECURITY_1` (SRP encryption).
+- Confirm and complete-provisioning endpoints are `[AllowAnonymous]` by design — the device has no JWT. The provisioning token itself acts as the credential.

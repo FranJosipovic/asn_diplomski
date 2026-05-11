@@ -3,7 +3,7 @@ import { createTenant } from '../api'
 import type { TenantResponse } from '../types'
 
 interface Props {
-  onSuccess: (tenant: TenantResponse) => void
+  onSuccess: (tenant: TenantResponse, credentials: { email: string; password: string }) => void
 }
 
 interface FormState {
@@ -55,8 +55,9 @@ export default function CreateTenantForm({ onSuccess }: Props) {
         ...(form.postalCode         && { postalCode: form.postalCode }),
         ...(form.country            && { country: form.country }),
       })
+      const credentials = { email: form.email, password: form.password }
       setForm(empty)
-      onSuccess(tenant)
+      onSuccess(tenant, credentials)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {

@@ -52,16 +52,55 @@ Controllers inject handlers directly and map between DTOs and commands.
 - Device types: `SensorUnit` (auto-provisioned with Temperature + SoilMoisture sensors) and `PumpUnit` (auto-provisioned with WaterLevel + PumpCommand sensors)
 - On tenant creation, `CreateTenantHandler` automatically provisions one SensorUnit and one PumpUnit via `CreateDeviceWithSensorsHandler`
 
+### Device Status (`DeviceStatus` enum)
+
+Stored as `int` in the `Status` column of the `devices` table.
+
+| Value | Name | Set by | Condition |
+|---|---|---|---|
+| 0 | `NotProvisioned` | Initial / migration | Device created but never provisioned |
+| 1 | `ProvisioningReady` | `GetProvisioningTokenHandler` | `GET /api/provision` called; token generated |
+| 2 | `Provisioning` | `CompleteDeviceProvisioningHandler` | Device exchanged token via `POST /api/provision` |
+| 3 | `Ready` | `ConfirmMqttConnectionHandler` | Device confirmed MQTT; subscriptions activated |
+| 4 | `Working` | `HandleDeviceStatusHandler` | Received `{"event":"started"}` on MQTT status topic |
+| 5 | `Stopped` | `HandleDeviceStatusHandler` | Received `{"event":"stopped"}` on MQTT status topic |
+
+**Commandable devices** (status ∈ {Ready, Working, Stopped}) are targeted by `POST /api/provision/start` and `POST /api/provision/stop`.
+
 ### MQTT Pipeline
 
-Topic format: `tenant_{tenantId}/device_{deviceId}/sensor/{slug}`  
-Slugs: `soil` (soil moisture), `water-level`, `temperature`
+**Topic formats:**
+```
+tenant_{tenantId}/device_{deviceId}/sensor_{sensorId}/{slug}   # sensor data
+tenant_{tenantId}/device_{deviceId}/command                    # commands to device
+tenant_{tenantId}/device_{deviceId}/status                     # lifecycle events from device
+```
+Sensor slugs: `soil`, `water-level`, `temperature`
 
-**Incoming flow:** `MqttService` (IHostedService) receives messages → writes to `MqttIncomingChannel` (Channel<T>) → `MqttIncomingWorker` (BackgroundService) reads and dispatches to use-case handlers based on the topic slug via `MqttMessageMapper`.
+**Incoming flow:** `MqttService` (IHostedService) receives messages → writes to `MqttIncomingChannel` (Channel<T>) → `MqttIncomingWorker` (BackgroundService) dispatches based on the last topic segment (slug) via `MqttMessageMapper`:
 
-**Outgoing flow:** Use-case handlers call `IMqttPublisher.Enqueue(...)` → `MqttOutgoingChannel` → `MqttOutgoingWorker` → `MqttService.PublishAsync(...)`.
+| Slug | Handler |
+|---|---|
+| `temperature` | `HandleTemperatureHandler` |
+| `soil` | `HandleSoilMoistureHandler` |
+| `water-level` | `HandleWaterLevelHandler` |
+| `status` | `HandleDeviceStatusHandler` — transitions Working/Stopped |
 
-**Device connect flow:** Microcontroller calls `POST /api/devices/{id}/connect` → `ConnectDeviceHandler` → `IMqttSubscriber.SubscribeToDeviceAsync(device)` → MQTT subscription activated. On reconnect, `MqttService.OnConnectedAsync` re-subscribes all active devices automatically.
+**Outgoing flow:** Handlers call `IMqttPublisher.Enqueue(tenantId, deviceId, payload)` → builds topic `tenant_{id}/device_{id}/command` → `MqttOutgoingChannel` → `MqttOutgoingWorker` → `MqttService.PublishAsync(...)`.
+
+**Subscription lifecycle:** `POST /api/provision/confirm` → `ConfirmMqttConnectionHandler` calls `IMqttSubscriber.SubscribeToDeviceAsync(device)` → subscribes to all sensor topics **and** the status topic for that device. On broker reconnect, `MqttService.OnConnectedAsync` re-subscribes all previously registered topics automatically.
+
+### Provisioning Endpoints (`ProvisionController`)
+
+| Method | Path | Auth | Handler |
+|---|---|---|---|
+| GET | `/api/provision` | JWT | `GetProvisioningTokenHandler` |
+| POST | `/api/provision` | None | `CompleteDeviceProvisioningHandler` |
+| POST | `/api/provision/confirm` | None | `ConfirmMqttConnectionHandler` |
+| POST | `/api/provision/start` | JWT | inline — publishes `{"command":"start"}` |
+| POST | `/api/provision/stop` | JWT | inline — publishes `{"command":"stop"}` |
+
+See `PROVISIONING.md` (repo root) for the full flow.
 
 ### Database
 

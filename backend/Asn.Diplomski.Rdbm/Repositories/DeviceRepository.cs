@@ -57,11 +57,25 @@ namespace Asn.Diplomski.Rdbm.Repositories
             => _db.Devices
                 .FirstOrDefaultAsync(d => d.Id == deviceId && d.TenantId == tenantId);
 
+        public Task<Device?> GetByIdAndTenantWithSensorsAsync(long deviceId, long tenantId)
+            => _db.Devices
+                .Include(d => d.Sensors)
+                .FirstOrDefaultAsync(d => d.Id == deviceId && d.TenantId == tenantId);
+
         public async Task<IReadOnlyList<Device>> GetAllProvisionedByTenantAsync(long tenantId)
             => await _db.Devices
                 .Where(d => d.TenantId == tenantId
-                    && d.ProvisionStatus == ProvisionStatus.Provisioned
+                    && d.Status == DeviceStatus.Ready
                     && d.IsActive)
+                .ToListAsync();
+
+        public async Task<IReadOnlyList<Device>> GetAllCommandableByTenantAsync(long tenantId)
+            => await _db.Devices
+                .Where(d => d.TenantId == tenantId
+                    && d.IsActive
+                    && (d.Status == DeviceStatus.Ready
+                        || d.Status == DeviceStatus.Working
+                        || d.Status == DeviceStatus.Stopped))
                 .ToListAsync();
     }
 }

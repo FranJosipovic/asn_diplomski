@@ -67,9 +67,13 @@ namespace Asn.Diplomski.Server.Mqtt
 
         public async Task SubscribeToDeviceAsync(Device device)
         {
-            foreach (var sensor in device.Sensors.Where(s => s.IsActive && s.Type != SensorType.PumpCommand))
+            var topics = device.Sensors
+                .Where(s => s.IsActive && s.Type != SensorType.PumpCommand)
+                .Select(s => MqttTopics.BuildSensorTopic(device.TenantId, device.Id, s.Id, s.Type))
+                .Append(MqttTopics.BuildStatusTopic(device.TenantId, device.Id));
+
+            foreach (var topic in topics)
             {
-                var topic = MqttTopics.BuildSensorTopic(device.TenantId, device.Id,sensor.Id, sensor.Type);
                 _subscribedTopics.TryAdd(topic, 0);
 
                 if (!_client.IsConnected)
@@ -80,6 +84,32 @@ namespace Asn.Diplomski.Server.Mqtt
                 }
 
                 await SubscribeAsync(topic);
+            }
+        }
+
+        public async Task UnsubscribeFromDeviceAsync(long tenantId, long deviceId)
+        {
+            var prefix = $"tenant_{tenantId}/device_{deviceId}/";
+            var topics = _subscribedTopics.Keys.Where(t => t.StartsWith(prefix)).ToList();
+
+            foreach (var topic in topics)
+            {
+                _subscribedTopics.TryRemove(topic, out _);
+
+                if (!_client.IsConnected)
+                {
+                    _logger.LogWarning(
+                        "Klijent nije spojen — topic '{Topic}' uklonjen iz registra bez slanja UNSUBSCRIBE.", topic);
+                    continue;
+                }
+
+                await _client.UnsubscribeAsync(
+                    new MqttClientUnsubscribeOptionsBuilder()
+                        .WithTopicFilter(topic)
+                        .Build(),
+                    CancellationToken.None);
+
+                _logger.LogInformation("MQTT pretplata uklonjena — topic: '{Topic}'", topic);
             }
         }
 

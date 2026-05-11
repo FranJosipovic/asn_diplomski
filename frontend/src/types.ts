@@ -4,10 +4,10 @@ export enum DeviceType {
 }
 
 export enum SensorType {
-  Temperature = 1,
-  SoilMoisture = 2,
-  WaterLevel = 3,
-  PumpCommand = 4,
+  Temperature = 'Temperature',
+  SoilMoisture = 'SoilMoisture',
+  WaterLevel = 'WaterLevel',
+  PumpCommand = 'PumpCommand',
 }
 
 export interface SensorResponse {
@@ -19,9 +19,12 @@ export interface SensorResponse {
   createdAt: string
 }
 
+export type ProvisionStatus = 'NotProvisioned' | 'Provisioning' | 'Provisioned'
+
 export interface DeviceResponse {
   id: number
   type: DeviceType
+  provisionStatus: ProvisionStatus
   deviceNumber: number
   description: string | null
   isActive: boolean
@@ -58,6 +61,14 @@ export interface CreateTenantRequest {
   city?: string
   postalCode?: string
   country?: string
+}
+
+export interface AuthState {
+  accessToken: string
+  refreshToken: string
+  refreshTokenExpiresAt: string
+  tenantId: number
+  email: string
 }
 
 export interface StoredTenant {

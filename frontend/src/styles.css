@@ -572,7 +572,6 @@ body::before {
   border: 1px solid var(--border-0);
 }
 
-.info-item {}
 
 .info-key {
   font-family: var(--font-mono);
@@ -683,6 +682,10 @@ body::before {
   background: var(--bg-surface);
   border: 1px solid var(--border-0);
   margin-bottom: 5px;
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .sensor-row:last-child { margin-bottom: 0; }
@@ -767,6 +770,201 @@ body::before {
 .mt-12 { margin-top: 12px; }
 .mt-20 { margin-top: 20px; }
 .mt-28 { margin-top: 28px; }
+
+/* ─── Auth view ──────────────────────────────────────────── */
+.auth-layout {
+  display: grid;
+  grid-template-columns: 1fr 440px;
+  gap: 48px;
+  align-items: center;
+  min-height: calc(100vh - 56px - 64px);
+}
+
+.auth-brand {
+  padding-right: 32px;
+}
+
+.auth-tagline {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-1);
+  line-height: 1.8;
+  margin-top: 20px;
+}
+
+.auth-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-1);
+}
+
+.auth-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-1);
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 14px 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--ease);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.auth-tab:hover { color: var(--text-1); }
+
+.auth-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: rgba(0, 204, 150, 0.04);
+}
+
+.auth-form {
+  padding: 24px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* ─── Provisioning banner ────────────────────────────────── */
+.provision-banner {
+  background: var(--bg-panel);
+  border: 1px solid var(--amber);
+  margin-bottom: 24px;
+}
+
+.provision-banner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+}
+
+.provision-banner-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.provision-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+  margin-top: 5px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.provision-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--amber);
+  margin-bottom: 4px;
+}
+
+.provision-subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-1);
+  line-height: 1.6;
+}
+
+.provision-subtitle strong { color: var(--text-0); }
+
+.provision-steps {
+  border-top: 1px solid var(--border-0);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.provision-step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.provision-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--amber-dim);
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.provision-step-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.provision-step-body {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-1);
+  line-height: 1.7;
+}
+
+.provision-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-2);
+  padding: 10px 14px;
+  border: 1px solid var(--border-0);
+  background: var(--bg-surface);
+  border-left: 2px solid var(--amber);
+  letter-spacing: 0.3px;
+}
+
+.provision-device-list {
+  border-top: 1px solid var(--border-0);
+  padding: 12px 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.provision-device-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provision-device-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-1);
+}
+
+.provision-status-badge.status-notprovisioned {
+  color: var(--orange);
+  border-color: var(--orange);
+  background: var(--orange-dim);
+}
+
+.provision-status-badge.status-provisioning {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--amber-dim);
+}
 
 /* ─── Sensor Detail ──────────────────────────────────────── */
 .sensor-detail {
@@ -880,9 +1078,14 @@ body::before {
 }
 
 /* Make sensor rows clickable when temperature/soil moisture */
+.sensor-row:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .sensor-row.readable {
   cursor: pointer;
-  transition: all var(--ease);
+  transition: background-color var(--ease), border-color var(--ease);
 }
 
 .sensor-row.readable:hover {

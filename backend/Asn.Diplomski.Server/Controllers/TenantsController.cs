@@ -156,7 +156,7 @@ namespace Asn.Diplomski.Server.Controllers
             {
                 Id              = d.Id,
                 Type            = d.Type,
-                ProvisionStatus = d.ProvisionStatus,
+                Status = d.Status,
                 DeviceNumber    = d.DeviceNumber,
                 Description     = d.Description,
                 IsActive        = d.IsActive,

@@ -25,7 +25,7 @@ namespace Asn.Diplomski.Application.UseCases.CompleteDeviceProvisioning
                     : CompleteDeviceProvisioningResult.NotFound();
             }
 
-            device.ProvisionStatus = ProvisionStatus.Provisioning;
+            device.Status = DeviceStatus.Provisioning;
             device.ProvisioningToken = null;
             device.ProvisioningTokenExpiresAt = null;
 

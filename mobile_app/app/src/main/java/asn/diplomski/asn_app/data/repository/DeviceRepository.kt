@@ -5,7 +5,9 @@ import asn.diplomski.asn_app.data.TokenManager
 import asn.diplomski.asn_app.data.api.AsnApi
 import asn.diplomski.asn_app.domain.model.Device
 import asn.diplomski.asn_app.domain.model.DeviceProvisionInfo
+import asn.diplomski.asn_app.domain.model.ProvisionDevice
 import asn.diplomski.asn_app.domain.model.Sensor
+import asn.diplomski.asn_app.domain.model.TenantProfile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,6 +67,77 @@ class DeviceRepository @Inject constructor(
             Result.success(device.provisionStatus)
         } catch (e: Exception) {
             Log.e(TAG, "getDeviceProvisionStatus: failed", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAllProvisionDevices(token: String?): Result<List<ProvisionDevice>> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+            ?: return Result.failure(Exception("No token available"))
+        return try {
+            val response = api.getProvisioningConfig(authHeader)
+            val devices = response.devices.map { dto ->
+                ProvisionDevice(
+                    deviceId = dto.deviceId,
+                    deviceType = dto.deviceType,
+                    deviceSsid = dto.deviceSsid,
+                    provisionStatus = dto.provisionStatus
+                )
+            }
+            Result.success(devices)
+        } catch (e: Exception) {
+            Log.e(TAG, "getAllProvisionDevices: failed", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTenantProfile(token: String?): Result<TenantProfile> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+            ?: return Result.failure(Exception("No token available"))
+        return try {
+            val response = api.getTenant(authHeader)
+            Result.success(
+                TenantProfile(
+                    id = response.id,
+                    name = response.name,
+                    email = response.email,
+                    plan = response.plan,
+                    phoneNumber = response.phoneNumber,
+                    contactPersonName = response.contactPersonName,
+                    street = response.street,
+                    city = response.city,
+                    postalCode = response.postalCode,
+                    country = response.country
+                )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "getTenantProfile: failed", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun startProvision(token: String?): Result<Unit> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+            ?: return Result.failure(Exception("No token available"))
+        return try {
+            Log.d(TAG, "startProvision: POST /api/Provision/start")
+            api.startProvision(authHeader)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "startProvision: failed", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun stopProvision(token: String?): Result<Unit> {
+        val authHeader = tokenManager.getAuthorizationHeader(token)
+            ?: return Result.failure(Exception("No token available"))
+        return try {
+            Log.d(TAG, "stopProvision: POST /api/Provision/stop")
+            api.stopProvision(authHeader)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "stopProvision: failed", e)
             Result.failure(e)
         }
     }
