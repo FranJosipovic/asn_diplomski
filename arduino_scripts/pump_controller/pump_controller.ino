@@ -1,7 +1,5 @@
-//x9ptbkxb5bxx2kxx
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include "SHTC3-SOLDERED.h"
 #include <network_provisioning/manager.h>
 #include <network_provisioning/scheme_softap.h>
 #include <Preferences.h>
@@ -19,8 +17,8 @@ enum LedState {
   LED_NOT_PROVISIONED,  // solid orange  — no WiFi credentials stored
   LED_PROVISIONING,     // blink purple  — SoftAP active, waiting for app
   LED_BACKEND_CONFIG,   // blink blue    — WiFi ok, talking to backend / MQTT connecting
-  LED_READY,            // solid blue    — MQTT connected, waiting for start command
-  LED_WORKING,          // blink green   — sending sensor data
+  LED_READY,            // solid blue    — MQTT connected, pump off
+  LED_WORKING,          // blink green   — pump running
   LED_STOPPED           // solid red     — received stop command
 };
 
@@ -75,20 +73,15 @@ void updateLed() {
 }
 
 // ─── Device identity ──────────────────────────────────────────────────────────
-#define PROV_SSID "SensorUnit_25"
-#define RESET_PIN 0
-
-// ─── Soil sensor calibration ──────────────────────────────────────────────────
-const int sensorPin = 10;
-const int DRY_VALUE = 2800;
-const int WET_VALUE = 0;
+#define PROV_SSID  "PumpUnit_01"
+#define BUTTON_PIN 0
+#define RELAY_PIN  14
 
 // ─── Runtime state ────────────────────────────────────────────────────────────
-bool wifiReady = false;
-bool systemStarted = false;
+bool wifiReady      = false;
+bool systemStarted  = false;
 bool mqttConfirmSent = false;
-
-unsigned long buttonPressedAt = 0;
+bool pumpOn         = false;
 
 String mqttHost = "";
 int    mqttPort  = 1883;
@@ -96,21 +89,14 @@ String srvHost   = "";
 int    srvPort   = 80;
 String tenantId  = "";
 String deviceId  = "";
-String tempSensorId = "";
-String soilSensorId = "";
 
 // ─── Peripherals ──────────────────────────────────────────────────────────────
 WiFiClient   wifiClient;
 PubSubClient mqtt(wifiClient);
 Preferences  prefs;
-SHTC3        shtcSensor;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 void logLine(const String& msg) { Serial.println("[LOG] " + msg); }
-
-String topic(const String& sensorId, const char* slug) {
-  return String("tenant_") + tenantId + "/device_" + deviceId + "/sensor_" + sensorId + "/" + slug;
-}
 
 String commandTopic() {
   return String("tenant_") + tenantId + "/device_" + deviceId + "/command";
@@ -122,30 +108,15 @@ String statusTopic() {
 
 void publishJson(const String& t, const String& payload) {
   bool ok = mqtt.publish(t.c_str(), payload.c_str(), true);
-  logLine("Publish → Topic: " + t);
-  logLine("Payload: " + payload);
-  logLine(String("Status: ") + (ok ? "OK" : "FAILED"));
+  logLine("Publish → " + t + " : " + payload + (ok ? " [OK]" : " [FAIL]"));
 }
 
-String isoTimestamp() {
-  unsigned long s = millis() / 1000;
-  return String("1970-01-01T00:00:") + String(s) + "Z";
-}
-
-String temperaturePayload(float temp) {
-  return String("{")
-    + "\"value\":"       + String(temp, 2) + ","
-    + "\"unit\":\"°C\","
-    + "\"timestamp\":\"" + isoTimestamp() + "\""
-    + "}";
-}
-
-String soilPayload(int soilPct) {
-  return String("{")
-    + "\"value\":"       + String(soilPct) + ","
-    + "\"unit\":\"%\","
-    + "\"timestamp\":\"" + isoTimestamp() + "\""
-    + "}";
+// ─── Relay control ────────────────────────────────────────────────────────────
+void setPump(bool on) {
+  pumpOn = on;
+  digitalWrite(RELAY_PIN, on ? HIGH : LOW);
+  ledState = on ? LED_WORKING : LED_READY;
+  logLine(on ? "Pump ON" : "Pump OFF");
 }
 
 // ─── MQTT message callback ────────────────────────────────────────────────────
@@ -158,13 +129,14 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
   String cmd = doc["command"].as<String>();
   if (cmd == "start") {
-    logLine("Received 'start' command — beginning sensor loop.");
+    logLine("Received 'start' — system active.");
     systemStarted = true;
-    ledState = LED_WORKING;
+    ledState = LED_READY;
     publishJson(statusTopic(), "{\"event\":\"started\"}");
   } else if (cmd == "stop") {
-    logLine("Received 'stop' command — halting sensor loop.");
+    logLine("Received 'stop' — system halted.");
     systemStarted = false;
+    setPump(false);
     ledState = LED_STOPPED;
     publishJson(statusTopic(), "{\"event\":\"stopped\"}");
   }
@@ -175,7 +147,7 @@ void confirmMqttConnection() {
   if (srvHost.isEmpty()) return;
   String url  = "http://" + srvHost + ":" + String(srvPort) + "/api/provision/confirm";
   String body = "{\"tenantId\":" + tenantId + ",\"deviceId\":" + deviceId + "}";
-  logLine("Confirming MQTT connection: POST " + url);
+  logLine("Confirming MQTT: POST " + url);
 
   HTTPClient http;
   http.begin(url);
@@ -185,14 +157,15 @@ void confirmMqttConnection() {
   http.end();
 }
 
-// ─── Full reprovision: notify backend then wipe everything ───────────────────
+// ─── Full reprovision ─────────────────────────────────────────────────────────
 void requestReprovision() {
   if (srvHost.isEmpty() || tenantId.isEmpty() || deviceId.isEmpty()) {
     logLine("Cannot reprovision — srvHost/tenantId/deviceId not set");
     return;
   }
 
-  ledState = LED_NOT_PROVISIONED;  // solid orange while notifying backend
+  setPump(false);
+  ledState = LED_NOT_PROVISIONED;
   updateLed();
 
   String url  = "http://" + srvHost + ":" + String(srvPort) + "/api/provision/reprovision";
@@ -206,7 +179,6 @@ void requestReprovision() {
   logLine("Reprovision notify response: " + String(code));
   http.end();
 
-  // Wipe all stored config regardless of backend response — device is going to SoftAP
   WiFi.disconnect(true, true);
   prefs.begin("prov", false); prefs.clear(); prefs.end();
   prefs.begin("mqtt", false); prefs.clear(); prefs.end();
@@ -215,21 +187,29 @@ void requestReprovision() {
   ESP.restart();
 }
 
-// ─── Button hold detection (5 s) ─────────────────────────────────────────────
-void checkReprovisionButton() {
-  if (tenantId.isEmpty() || deviceId.isEmpty()) return;  // not yet provisioned
+// ─── Button: short press = toggle pump, 5 s hold = reprovision ───────────────
+void checkButton() {
+  static unsigned long pressedAt = 0;
+  static bool wasPressed = false;
 
-  if (digitalRead(RESET_PIN) == LOW) {
-    if (buttonPressedAt == 0) {
-      buttonPressedAt = millis();
-      logLine("Button held — keep holding 5 s to reprovision");
-    } else if (millis() - buttonPressedAt >= 5000) {
-      buttonPressedAt = 0;
-      logLine("5 s hold detected — reprovisioning...");
+  bool pressed = (digitalRead(BUTTON_PIN) == LOW);
+
+  if (pressed && !wasPressed) {
+    pressedAt = millis();
+    wasPressed = true;
+    logLine("Button pressed...");
+  } else if (!pressed && wasPressed) {
+    unsigned long held = millis() - pressedAt;
+    wasPressed = false;
+
+    if (held >= 5000) {
+      logLine("5 s hold — reprovisioning...");
       requestReprovision();
+    } else if (held >= 50 && systemStarted) {
+      logLine("Short press — toggling pump");
+      setPump(!pumpOn);
+      publishJson(statusTopic(), pumpOn ? "{\"event\":\"pump_on\"}" : "{\"event\":\"pump_off\"}");
     }
-  } else {
-    buttonPressedAt = 0;
   }
 }
 
@@ -237,12 +217,8 @@ void checkReprovisionButton() {
 unsigned long mqttRetryAt = 0;
 
 void connectMqtt() {
-  if (mqttHost.isEmpty()) {
-    logLine("mqttHost not set — skipping MQTT connect");
-    return;
-  }
-
-  if (millis() < mqttRetryAt) return;  // not time to retry yet
+  if (mqttHost.isEmpty()) return;
+  if (millis() < mqttRetryAt) return;
 
   mqtt.setServer(mqttHost.c_str(), mqttPort);
   mqtt.setCallback(onMqttMessage);
@@ -251,7 +227,7 @@ void connectMqtt() {
 
   logLine("Connecting to MQTT at " + mqttHost + ":" + String(mqttPort) + "...");
 
-  if (mqtt.connect("arduino-client", nullptr, nullptr, nullptr, 0, false, nullptr, true)) {
+  if (mqtt.connect("pump-controller", nullptr, nullptr, nullptr, 0, false, nullptr, true)) {
     logLine("MQTT connected");
     mqtt.subscribe(commandTopic().c_str());
     logLine("Subscribed to: " + commandTopic());
@@ -261,7 +237,7 @@ void connectMqtt() {
       mqttConfirmSent = true;
     }
 
-    ledState = LED_READY;  // solid blue — waiting for start command
+    ledState = LED_READY;
   } else {
     logLine("MQTT failed, state=" + String(mqtt.state()) + " — retrying in 5 s");
     mqttRetryAt = millis() + 5000;
@@ -270,7 +246,7 @@ void connectMqtt() {
 
 // ─── Complete provisioning: POST token to backend ────────────────────────────
 void completeProvisioning() {
-  ledState = LED_BACKEND_CONFIG;  // blink blue while talking to backend
+  ledState = LED_BACKEND_CONFIG;
 
   prefs.begin("prov", true);
   String token = prefs.getString("token", "");
@@ -279,23 +255,21 @@ void completeProvisioning() {
   prefs.end();
 
   if (token.isEmpty() || host.isEmpty()) {
-    logLine("No provisioning token — loading saved config.");
+    logLine("No token — loading saved config.");
 
     prefs.begin("mqtt", true);
-    mqttHost     = prefs.getString("host",    "");
-    mqttPort     = prefs.getInt   ("port",    1883);
-    srvHost      = prefs.getString("srvHost", "");
-    srvPort      = prefs.getInt   ("srvPort", 80);
-    tenantId     = prefs.getString("tenant",  "");
-    deviceId     = prefs.getString("device",  "");
-    tempSensorId = prefs.getString("tempId",  "");
-    soilSensorId = prefs.getString("soilId",  "");
+    mqttHost = prefs.getString("host",    "");
+    mqttPort = prefs.getInt   ("port",    1883);
+    srvHost  = prefs.getString("srvHost", "");
+    srvPort  = prefs.getInt   ("srvPort", 80);
+    tenantId = prefs.getString("tenant",  "");
+    deviceId = prefs.getString("device",  "");
     prefs.end();
 
     logLine("Loaded — MQTT=" + mqttHost + ":" + String(mqttPort)
             + " tenant=" + tenantId + " device=" + deviceId);
 
-    mqttConfirmSent = true;  // already confirmed on first boot
+    mqttConfirmSent = true;
     return;
   }
 
@@ -322,13 +296,6 @@ void completeProvisioning() {
       srvHost  = host;
       srvPort  = port;
 
-      for (JsonObject sensor : doc["sensors"].as<JsonArray>()) {
-        String type = sensor["sensorType"].as<String>();
-        String id   = String(sensor["sensorId"].as<long>());
-        if (type == "Temperature")  tempSensorId = id;
-        if (type == "SoilMoisture") soilSensorId = id;
-      }
-
       prefs.begin("mqtt", false);
       prefs.putString("host",    mqttHost);
       prefs.putInt   ("port",    mqttPort);
@@ -336,8 +303,6 @@ void completeProvisioning() {
       prefs.putInt   ("srvPort", srvPort);
       prefs.putString("tenant",  tenantId);
       prefs.putString("device",  deviceId);
-      prefs.putString("tempId",  tempSensorId);
-      prefs.putString("soilId",  soilSensorId);
       prefs.end();
 
       prefs.begin("prov", false);
@@ -346,7 +311,6 @@ void completeProvisioning() {
 
       logLine("Done. Tenant=" + tenantId + " Device=" + deviceId
               + " MQTT=" + mqttHost + ":" + String(mqttPort));
-      logLine("TempSensor=" + tempSensorId + " SoilSensor=" + soilSensorId);
     }
   }
 
@@ -388,7 +352,7 @@ void onEvent(arduino_event_t *event) {
 
     case ARDUINO_EVENT_PROV_START:
       logLine("Provisioning AP started — connect phone to: " PROV_SSID);
-      ledState = LED_PROVISIONING;  // blink purple
+      ledState = LED_PROVISIONING;
       break;
 
     case ARDUINO_EVENT_PROV_CRED_RECV:
@@ -401,7 +365,7 @@ void onEvent(arduino_event_t *event) {
 
     case ARDUINO_EVENT_PROV_CRED_FAIL:
       logLine("Provisioning: FAILED — bad credentials.");
-      ledState = LED_NOT_PROVISIONED;  // back to solid orange
+      ledState = LED_NOT_PROVISIONED;
       WiFi.disconnect(true, true);
       break;
 
@@ -413,7 +377,7 @@ void onEvent(arduino_event_t *event) {
       logLine("WiFi connected. IP: "
               + IPAddress(event->event_info.got_ip.ip_info.ip.addr).toString());
       wifiReady = true;
-      ledState = LED_BACKEND_CONFIG;  // blink blue — calling backend
+      ledState = LED_BACKEND_CONFIG;
       completeProvisioning();
       break;
 
@@ -432,17 +396,16 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
-  // Initialise LED first and force orange before any event can fire
   led.begin();
   setColor(255, 80, 0);
-  logLine("=== Booting device ===");
-  logLine("LED: orange (not provisioned)");
+  logLine("=== Booting pump controller ===");
 
-  shtcSensor.begin();
-  pinMode(RESET_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);  // relay off on boot
 
-  if (digitalRead(RESET_PIN) == LOW) {
-    logLine("RESET_PIN held — clearing all stored data and restarting...");
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    logLine("Button held at boot — clearing all stored data and restarting...");
     WiFi.disconnect(true, true);
     prefs.begin("prov", false); prefs.clear(); prefs.end();
     prefs.begin("mqtt", false); prefs.clear(); prefs.end();
@@ -461,8 +424,6 @@ void setup() {
     WiFi.begin();
   } else {
     logLine("Starting provisioning SoftAP: " PROV_SSID);
-    // ledState stays LED_NOT_PROVISIONED (orange) until ARDUINO_EVENT_PROV_START
-    // fires, then switches to LED_PROVISIONING (blink purple)
     WiFi.mode(WIFI_AP_STA);
     delay(100);
 
@@ -481,7 +442,7 @@ void setup() {
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
-  updateLed();  // must run every iteration — drives all LED blinking
+  updateLed();
 
   if (!wifiReady) {
     delay(100);
@@ -491,40 +452,6 @@ void loop() {
   if (!mqtt.connected()) connectMqtt();
   mqtt.loop();
 
-  if (!systemStarted) {
-    checkReprovisionButton();
-    static unsigned long lastWait = 0;
-    if (millis() - lastWait > 5000) {
-      lastWait = millis();
-      logLine("Waiting for 'start' command via MQTT...");
-    }
-    delay(100);
-    return;
-  }
-
-  // ── Sensor read & publish ──────────────────────────────────────────────────
-  shtcSensor.sample();
-
-  float temp    = shtcSensor.readTempC();
-  int   raw     = analogRead(sensorPin);
-  int   soilPct = constrain(map(raw, DRY_VALUE, WET_VALUE, 0, 100), 0, 100);
-
-  logLine("Temp: " + String(temp, 2) + " °C");
-  logLine("Soil raw: " + String(raw));
-  logLine("Soil moisture: " + String(soilPct) + " %");
-
-  if (!tempSensorId.isEmpty()) publishJson(topic(tempSensorId, "temperature"), temperaturePayload(temp));
-  if (!soilSensorId.isEmpty()) publishJson(topic(soilSensorId, "soil"),        soilPayload(soilPct));
-
-  logLine("Cycle complete\n");
-
-  // Non-blocking 5 s wait so button detection stays responsive during idle
-  unsigned long waitUntil = millis() + 5000;
-  while (millis() < waitUntil) {
-    checkReprovisionButton();
-    updateLed();
-    mqtt.loop();
-    delay(100);
-  }
+  checkButton();
+  delay(20);
 }
-
